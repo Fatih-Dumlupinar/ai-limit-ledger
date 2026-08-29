@@ -5,13 +5,31 @@ _[Türkçe](README.tr.md)_
 [![CI](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml)
 
-AI Limit Ledger is a privacy-first VS Code extension for monitoring AI coding usage limits, quotas, reset windows, and provider activity for Codex, Claude Code, GitHub Copilot, and Grok. Copilot uses the official GitHub Billing REST API only after GitHub authentication or an explicitly supplied Plan-read fine-grained PAT. Grok usage is off until explicitly enabled and uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability; the CLI-proxy fallback is also experimental and opt-in.
+Monitor Codex, Claude Code, GitHub Copilot, and Grok usage, quotas, and reset times from the VS
+Code status bar and dashboard — privacy-first, no telemetry.
 
-AI Limit Ledger is an independent community project and is not affiliated with or endorsed by OpenAI, Anthropic, GitHub, or xAI.
+## Preview status
 
-AI Limit Ledger shows Codex, Claude Code, GitHub Copilot, and Grok provider states in one Dashboard and the VS Code status bar. Provider failures are isolated and a missing CLI never removes a provider card.
+This is a **preview** release. Provider integrations, settings, and UI surfaces are considered
+functional but may still change between versions; the [Known limitations](#known-limitations)
+section below is the current, honest list of gaps.
 
-Hover for a Markdown usage table; click for a theme-aware provider dashboard with reset times, plan, CLI/App Server status, and available token activity.
+## Screenshots
+
+Marketplace screenshots are being prepared and are not embedded in this README yet — see
+[`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md) for how they
+will be produced (real extension renderer, synthetic fixture data only, no real account/usage
+data). No mockups or placeholder images are used in the meantime.
+
+## Why AI Limit Ledger?
+
+Juggling Codex, Claude Code, GitHub Copilot, and Grok usually means checking several separate
+dashboards to see how close you are to a rate limit or reset window. AI Limit Ledger brings the
+provider states you already have access to into one VS Code status bar item and one dashboard,
+without adding a new account, a new login, or any telemetry of its own. It reads from each
+provider's own official (or, where labeled, experimental) local or network surface — it never
+calls a model, never estimates usage from your prompts, and never combines providers into a single
+fabricated number.
 
 ## Supported providers
 
@@ -24,32 +42,21 @@ Hover for a Markdown usage table; click for a theme-aware provider dashboard wit
 
 See the full [provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) for exact sources, account/session insight coverage, and experimental boundaries.
 
-## Rich and Safe Dashboard
+## Core features
 
-The default **Rich Dashboard** is a themed Webview panel with reset times, plan, CLI/App Server status, and available token activity. The **Safe Dashboard** (`AI Limit Ledger: Select Dashboard Mode` → `Safe Native`) renders the same information as a read-only text editor document with no Webview or Service Worker APIs, for restricted or Webview-disabled environments. Both read from the same typed provider snapshots and stay in parity for supported fields.
+- One status bar item and one dashboard for Codex, Claude Code, GitHub Copilot, and Grok, with
+  provider failures isolated — a missing CLI never removes a provider card.
+- A **Rich Dashboard** (themed webview) and a **Safe Dashboard** (webview-free, read-only text
+  document) that render from the same typed provider snapshots and stay in parity.
+- Hover tooltip with a Markdown usage table; click for the full dashboard.
+- Typed English/Turkish localization across every runtime surface.
+- Zero production dependencies and no telemetry.
 
-## Data and privacy
+## Quick start
 
-Codex remains local-only and read-only. Copilot calls `GET /user` and the official user AI-credit billing endpoint with an auth session from VS Code's GitHub Authentication API or a user-entered Plan-read PAT stored only in VS Code SecretStorage; tokens are never logged or written to global/workspace state, and no repository/admin/write permission is requested. Grok starts `grok agent stdio` only after its provider is explicitly enabled; AI Limit Ledger does not read Grok auth files, prompt/transcript/code data, or run `grok login` automatically. There is no telemetry.
-
-## CI and repository security
-
-Task 12 adds four read-first repository checks: `CI` compiles, lints, formats, audits, tests, and
-packages on Ubuntu and Windows; `CodeQL` scans JavaScript/TypeScript on pull requests, pushes to
-`main`, and weekly on the default branch; `Secret Scan` uses the official Gitleaks CLI release
-after SHA-256 verification and scans the complete Git history with redacted output; and
-`Dependency Review` rejects moderate-or-higher dependency vulnerabilities on pull requests.
-Dependabot checks npm and GitHub Actions weekly without automatic merging.
-
-All external Actions are pinned to full commit SHAs with release-version comments. Workflows use
-`pull_request`, never `pull_request_target`, expose no repository secrets, and use minimum
-permissions. The current GitHub API metadata reports native secret scanning and push protection
-enabled; Task 12 does not change those settings and keeps the independent scan as a required
-defense. See [the CI security design](docs/CI-SECURITY-DESIGN.md) and [the ruleset checklist](docs/BRANCH-RULESET.md).
-
-## Installation status
-
-This extension is **not yet published to the Visual Studio Code Marketplace**. There is no Marketplace listing and no GitHub Release install path yet — that install path is planned for after the Marketplace publisher is set up (see [Roadmap](#roadmap)). For now, install from source:
+This extension is **not yet published to the Visual Studio Code Marketplace**. There is no
+Marketplace listing and no GitHub Release install path yet — that install path is planned for
+after the Marketplace publisher review (see [Roadmap](#roadmap)). For now, install from source:
 
 1. Clone this repository and follow [Development setup](#development-setup) to build a `.vsix` package.
 2. Install and sign in to Codex CLI (or whichever providers you use).
@@ -60,6 +67,51 @@ This extension is **not yet published to the Visual Studio Code Marketplace**. T
    ```
 
 For a Webview-free details view, run `AI Limit Ledger: Select Dashboard Mode`, choose `Safe Native`, and then run `AI Limit Ledger: Open Dashboard`. The Safe Dashboard opens as a read-only text editor document and does not use Webview or Service Worker APIs.
+
+## Rich and Safe Dashboard
+
+The default **Rich Dashboard** is a themed Webview panel with reset times, plan, CLI/App Server status, and available token activity. The **Safe Dashboard** (`AI Limit Ledger: Select Dashboard Mode` → `Safe Native`) renders the same information as a read-only text editor document with no Webview or Service Worker APIs, for restricted or Webview-disabled environments. Both read from the same typed provider snapshots and stay in parity for supported fields.
+
+## Provider requirements
+
+- **Codex** — the official Codex CLI installed and signed in; AI Limit Ledger talks to its local App Server only.
+- **Claude Code** — the official Claude Code CLI; run **Enable Claude Code Integration** to wire up the status-line bridge. The optional experimental OAuth usage check needs a separate, explicit opt-in.
+- **GitHub Copilot** — a VS Code GitHub authentication session, or a fine-grained PAT with only **Plan: read**, connected via **Connect GitHub Copilot Usage**.
+- **Grok** — the official Grok Build CLI, signed in with `grok login`, and **Enable Grok Usage** run explicitly; disabled by default.
+
+## Official, experimental, and derived data
+
+Every provider card and field is labeled with its source. **Official** means the data comes
+directly from a provider-documented API or local integration point (Codex's App Server, Copilot's
+GitHub Billing REST API, Claude's status-line integration, Grok's ACP transport). **Experimental**
+means the source is an undocumented or opt-in-only endpoint that may change or stop working without
+notice (Claude's CLI-free OAuth usage check, Grok's `x.ai/billing` capability and CLI-proxy
+fallback) — these are always off by default or require a separate explicit consent step, and the UI
+labels them as experimental wherever they appear. **Derived** fields (for example a calculated
+Copilot allowance from a configured plan) are explicitly marked as calculated, never presented as
+if the provider reported them directly. See `docs/PROVIDER_CAPABILITY_MATRIX.md` for the full
+per-provider breakdown.
+
+## Data and privacy
+
+Codex remains local-only and read-only. Copilot calls `GET /user` and the official user AI-credit billing endpoint with an auth session from VS Code's GitHub Authentication API or a user-entered Plan-read PAT stored only in VS Code SecretStorage; tokens are never logged or written to global/workspace state, and no repository/admin/write permission is requested. Grok starts `grok agent stdio` only after its provider is explicitly enabled; AI Limit Ledger does not read Grok auth files, prompt/transcript/code data, or run `grok login` automatically. There is no telemetry.
+
+### What this extension reads
+
+- Codex's local App Server responses (`account/read`, `account/rateLimits/read`, `account/usage/read`).
+- Claude Code's own status-line JSON output, once you enable the integration; and, only if you separately opt in, the OAuth access token from `~/.claude/.credentials.json` in memory for the experimental usage check.
+- GitHub Copilot's billing endpoints, using a VS Code GitHub auth session or a user-supplied Plan-read PAT.
+- Grok Build's ACP responses over `grok agent stdio`, only after you run **Enable Grok Usage**.
+- Your own AI Limit Ledger settings (`aiLimitLedger.*`).
+
+### What this extension does not read or store
+
+- No model prompts, completions, transcripts, or source code from any provider.
+- No credential values are ever written to logs, the Output Channel, diagnostics exports, or Marketplace/telemetry services — there is no telemetry.
+- No browser sessions, cookies, or page content from the Official provider links.
+- No refresh tokens, account IDs, emails, or subscription-plan fields from Claude's credential file, even during the experimental usage check.
+- No raw provider API payloads are persisted — only typed, allowlisted, provider-scoped values.
+- Provider totals (tokens, credits, messages, dollars, percentages) are never summed across providers, and a missing value is shown as unavailable rather than treated as zero.
 
 ## Settings
 
@@ -80,6 +132,37 @@ For a Webview-free details view, run `AI Limit Ledger: Select Dashboard Mode`, c
 The typed settings service normalizes provider aliases, removes duplicates, ignores unknown IDs, validates threshold ordering and numeric bounds, and reports only safe diagnostics. Dashboard and status-bar provider order/visibility are independent. `display.percentageMode` supports `remaining`, `used`, and `both`; language supports `auto`, `en`, and `tr`; time format supports `locale`, `relative`, `absolute`, and `both`. Tooltip density, notification/logging levels, and bounded last-known-good cache policy are also configurable.
 
 Use **Select Status Bar Mode**, **Select Percentage Display**, **Reset Display Settings**, and **Copy Redacted Effective Settings** from the Command Palette. Provider selection changes reconcile immediately; executable changes rerun detection only. Refresh changes retain the existing minimum-interval, single-flight, lease, and backoff protections. Machine-scoped paths and experimental settings ignore workspace values; experimental Copilot/Grok transports additionally require separate consent metadata.
+
+## Commands
+
+All commands are available from the Command Palette (`Ctrl+Shift+P`), prefixed `AI Limit Ledger:`.
+The most commonly used ones:
+
+- **Open Dashboard**, **Open Rich Dashboard**, **Open Safe Dashboard**, **Select Dashboard Mode**
+- **Refresh**, **Refresh Codex**, **Refresh Claude**, **Refresh GitHub Copilot Usage**, **Refresh Grok Usage**
+- **Enable Claude Code Integration**, **Disable Claude Code Integration**, **Repair Claude Code Integration**, **Diagnose Claude Code Integration**
+- **Enable CLI-free Claude Usage**, **Disable CLI-free Claude Usage**
+- **Connect GitHub Copilot Usage**, **Disconnect GitHub Copilot Usage**, **Configure Copilot Plan**, **Diagnose GitHub Copilot Integration**
+- **Enable Grok Usage**, **Disable Grok Usage**, **Recheck Grok Installation**, **Launch Grok Login**, **Diagnose Grok Integration**
+- **Select Status Bar Mode**, **Select Percentage Display**, **Select Display Language**, **Reset Display Settings**
+- **Copy Redacted Diagnostics**, **Copy Redacted Effective Settings**, **Export Redacted Support Bundle**, **Show Logs**, **Clear Cached Usage**
+
+The full list is defined in `package.json`'s `contributes.commands`.
+
+## CI and repository security
+
+Task 12 adds four read-first repository checks: `CI` compiles, lints, formats, audits, tests, and
+packages on Ubuntu and Windows; `CodeQL` scans JavaScript/TypeScript on pull requests, pushes to
+`main`, and weekly on the default branch; `Secret Scan` uses the official Gitleaks CLI release
+after SHA-256 verification and scans the complete Git history with redacted output; and
+`Dependency Review` rejects moderate-or-higher dependency vulnerabilities on pull requests.
+Dependabot checks npm and GitHub Actions weekly without automatic merging.
+
+All external Actions are pinned to full commit SHAs with release-version comments. Workflows use
+`pull_request`, never `pull_request_target`, expose no repository secrets, and use minimum
+permissions. The current GitHub API metadata reports native secret scanning and push protection
+enabled; Task 12 does not change those settings and keeps the independent scan as a required
+defense. See [the CI security design](docs/CI-SECURITY-DESIGN.md) and [the ruleset checklist](docs/BRANCH-RULESET.md).
 
 ## Development requirements
 
@@ -102,9 +185,9 @@ The experimental CLI-free Claude usage check is an account usage `GET` request t
 The common typed insights model keeps account metrics, latest-session metrics, daily trends, and source provenance separate. Summary shows at most five safe fields; detailed mode exposes the remaining allowlisted fields in an expandable section; hidden mode leaves the primary quota cards and reset information unchanged. Invalid, negative, non-finite, stale, or unavailable values are omitted or labeled rather than converted into fake percentages.
 
 - Codex uses only official App Server `account/read`, `account/rateLimits/read` (including its update notification), and `account/usage/read`. Daily usage is sorted, duplicate dates are merged, and at most 30 days are retained internally; the default display is the latest 14 days. Reset credits and observed expiration dates are display-only.
-- Claude’s official status-line snapshot keeps account 5-hour/7-day limits separate from the latest observed CLI session. Model, context, input/output/cache tokens, estimated cost, durations, line counts, fast/effort/thinking/output-style fields are explicit allowlist fields. Experimental OAuth account limits never overwrite official session metrics.
-- GitHub Copilot makes AI credits the primary metric. An allowance is shown only when authoritative or explicitly user-configured and marked calculated. Premium interactions, chat, and completions remain separate; organization management is not a monthly denominator.
-- Grok uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability. Its CLI-proxy billing fallback is also experimental and opt-in. Missing product breakdowns remain not exposed rather than an empty product array, and `/usage` is only the official Grok Build account view run by the user; AI Limit Ledger does not run `/usage` automatically.
+- Claude's official status-line snapshot keeps account 5-hour/7-day limits separate from the latest observed CLI session — that session insight always reflects the most recently observed local CLI session, not an account-wide total. Model, context, input/output/cache tokens, estimated cost, durations, line counts, fast/effort/thinking/output-style fields are explicit allowlist fields. Experimental OAuth account limits never overwrite official session metrics.
+- GitHub Copilot makes AI credits the primary metric. An allowance is shown only when authoritative or explicitly user-configured and marked calculated; organization-managed accounts may have no personal allowance to show, and this is displayed as unavailable rather than estimated. Premium interactions, chat, and completions remain separate; organization management is not a monthly denominator.
+- Grok uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability. Its CLI-proxy billing fallback is also experimental and opt-in. A free Grok account may not expose a numeric usage percentage at all — this is shown as unavailable, not estimated. Missing product breakdowns remain not exposed rather than an empty product array, and `/usage` is only the official Grok Build account view run by the user; AI Limit Ledger does not run `/usage` automatically.
 
 See `docs/PROVIDER_CAPABILITY_MATRIX.md` for the source and limitation matrix.
 
@@ -151,11 +234,11 @@ The current labels are **Open GitHub Copilot Billing** and **Open Grok Billing**
 
 ## GitHub Copilot connection
 
-Run **AI Limit Ledger: Connect GitHub Copilot Usage**. VS Code GitHub Authentication is tried first. If it cannot satisfy the billing endpoint, choose **Use fine-grained PAT** and grant only **Plan: read**. Run **Disconnect GitHub Copilot Usage** to remove only AI Limit Ledger's own PAT secret. GitHub billing can lag behind individual Copilot requests, so the Dashboard says so explicitly.
+Run **AI Limit Ledger: Connect GitHub Copilot Usage**. VS Code GitHub Authentication is tried first. If it cannot satisfy the billing endpoint, choose **Use fine-grained PAT** and grant only **Plan: read**. Run **Disconnect GitHub Copilot Usage** to remove only AI Limit Ledger's own PAT secret. GitHub billing can lag behind individual Copilot requests, so the Dashboard says so explicitly. Organization-managed Copilot accounts may not expose a personal allowance at all; this is shown as unavailable rather than estimated.
 
 ## Grok Build usage
 
-Grok usage is disabled until you run **Enable Grok Usage**. Install the official CLI from the xAI/Grok Build guide, sign in with `grok login` in the launched VS Code terminal, then run **Recheck Grok Installation**. When enabled, AI Limit Ledger uses the official Grok Build ACP transport; the `x.ai/billing` capability and the CLI-proxy billing fallback are experimental, and the fallback is opt-in. The community `pawelhuryn.grok-vscode-phuryn` extension is detected as community-only and is never treated as the official billing source. Use `/usage` inside Grok Build for the official account view; AI Limit Ledger does not run `/usage` automatically.
+Grok usage is disabled until you run **Enable Grok Usage**. Install the official CLI from the xAI/Grok Build guide, sign in with `grok login` in the launched VS Code terminal, then run **Recheck Grok Installation**. When enabled, AI Limit Ledger uses the official Grok Build ACP transport; the `x.ai/billing` capability and the CLI-proxy billing fallback are experimental, and the fallback is opt-in. The community `pawelhuryn.grok-vscode-phuryn` extension is detected as community-only and is never treated as the official billing source. Use `/usage` inside Grok Build for the official account view; AI Limit Ledger does not run `/usage` automatically. Free Grok accounts may not receive a numeric usage percentage from the billing capability at all.
 
 After a successful Repair, the Claude card shows **Restart Claude CLI session**. Close existing Claude CLI sessions, start a completely new one, and complete one response. A valid snapshot removes the restart/waiting message automatically.
 
@@ -179,6 +262,12 @@ If the Dashboard shows **Repair required**, or Claude usage limits still aren't 
 6. Reopen (or wait a moment for) **AI Limit Ledger: Open Dashboard** — it updates live once a valid snapshot arrives, with no need to reopen the panel.
 
 If usage still doesn't appear after a real completed response with a `ready` diagnostic state beforehand, use **Copy redacted diagnostics** and report the issue — the copied text never includes commands, raw JSON, credentials, or your full home directory path.
+
+## Support
+
+For general troubleshooting steps, see [SUPPORT.md](SUPPORT.md) — it covers missing insights, settings/diagnostics exports, live localization checks, bug reports, and per-provider diagnose commands. For anything not covered there, open a
+[GitHub Issue](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/issues). Do not open a public
+issue for a security vulnerability — see [Security reporting](#security-reporting).
 
 ## Development setup
 
@@ -217,17 +306,32 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 
 - Not published on the Visual Studio Code Marketplace yet; install from source only.
 - Claude's CLI-free OAuth usage check, Grok's experimental `x.ai/billing` capability, and Grok's CLI-proxy billing fallback are **experimental**, off by default or opt-in, and depend on undocumented provider endpoints that may change or stop working without notice.
-- GitHub Copilot billing can lag behind individual Copilot requests; the Dashboard states this explicitly rather than estimating.
+- Claude's latest-session insight reflects the most recently observed CLI session only, not an account-wide total across sessions.
+- GitHub Copilot organization-managed accounts may not expose a personal allowance; billing can also lag behind individual Copilot requests, and the Dashboard states both explicitly rather than estimating.
+- Grok Free accounts may not receive a numeric usage percentage from the billing capability at all.
 - Some `npm audit` findings may appear in the future in dev-only tooling (`vitest`/`vite` chain); production dependencies are and will remain zero.
 - Windows is the primary development and test target for the Claude status-line wrapper; macOS/Linux chaining has an explicit best-effort fallback rather than full parity.
+- Marketplace screenshots are not yet produced — see [Screenshots](#screenshots).
 
 ## Roadmap
 
 The items below are **planned, not committed**, and may change:
 
 - Additional branch protection/ruleset configuration after the Task 12 PR is reviewed.
-- A Visual Studio Code Marketplace publisher and listing, with a GitHub Release-based install path.
+- A Visual Studio Code Marketplace publish, once the Task 13 preflight checklist
+  (`docs/MARKETPLACE-PREFLIGHT.md`) is complete and screenshots are produced, with a GitHub
+  Release-based install path.
 - Additional provider support may be considered in the future; nothing beyond Codex, Claude Code, GitHub Copilot, and Grok is currently planned or implemented.
+
+## Non-affiliation
+
+AI Limit Ledger is an independent project and is not affiliated with, endorsed by, or sponsored by
+Microsoft, GitHub, OpenAI, Anthropic, or xAI. Provider names are used only to describe
+interoperability and are not used as, or alongside, any provider logo or trademark image.
+
+## Türkçe
+
+Bu belgenin Türkçe çevirisi için bkz. [README.tr.md](README.tr.md).
 
 ## License
 

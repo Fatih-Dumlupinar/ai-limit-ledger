@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+- **Task 13 — VS Code Marketplace listing and package preparation.** No provider/runtime behavior
+  change. `package.json`'s `publisher` changed from `local` to the real Marketplace publisher ID
+  `fatihdumlupinar-dev` (permanent extension ID: `fatihdumlupinar-dev.ai-limit-ledger`), and
+  `preview: true` was added for the first Marketplace release. Keywords were expanded to 16
+  (within the 30 max) covering usage/quota/provider-discovery terms; `categories` remains
+  `Other`/`Visualization`.
+- Restructured `README.md`/`README.tr.md` with a Marketplace-oriented layout: preview-status
+  callout, a "Why AI Limit Ledger?" section, explicit "what this extension reads" / "does not read
+  or store" sections, a Commands reference, a Support section, and a dedicated non-affiliation
+  notice (Microsoft, GitHub, OpenAI, Anthropic, xAI). English and Turkish carry the same semantics.
+- Added `docs/MARKETPLACE-LISTING.md`, `docs/MARKETPLACE-ASSET-INVENTORY.md`,
+  `docs/MARKETPLACE-PREFLIGHT.md`, and `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`. Marketplace
+  screenshots are not yet produced — this non-interactive environment has no display/GUI automation
+  available to capture them, so no mockup or placeholder image was committed; the runbook documents
+  the manual, synthetic-data-only capture procedure for a person with a desktop VS Code install.
+- Extended `scripts/release-audit.mjs` with Marketplace-specific checks: exact publisher/extension
+  ID/version match, placeholder-publisher rejection, category allowlist, keyword count/duplicate
+  checks, README section/non-affiliation presence, HTTPS-only image links, no local/absolute
+  paths, no publish-workflow files, and no `vsce publish` invocation in the source tree.
+- Added `.vscodeignore` entries excluding the new Marketplace-preparation docs and
+  `assets/marketplace/**` from the packaged VSIX (screenshots are a repository/listing asset, not a
+  runtime asset; `vsce`'s relative-image-to-GitHub-URL rewrite means the Marketplace page can still
+  render them without shipping them in the package).
+- Added 4 new test files / 131 new tests (publisher/extension identity, category/keyword policy,
+  README section/parity/non-affiliation/overstated-claim/image-link checks, icon and screenshot
+  asset policy, VSIX denylist and packaged-identity regressions) — the suite now contains 98 files
+  / 990 tests, verified stable across three consecutive full runs on the same final tree under
+  Node 24.20.0.
 - Added secure GitHub Actions CI for Ubuntu/Windows quality checks, CodeQL, independent full-history
   Gitleaks scanning with checksum verification, moderate-threshold Dependency Review, and weekly
   Dependabot npm/Actions updates.

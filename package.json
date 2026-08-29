@@ -3,8 +3,9 @@
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "0.6.2",
-  "publisher": "local",
+  "publisher": "fatihdumlupinar-dev",
   "private": true,
+  "preview": true,
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,13 +24,22 @@
     "Visualization"
   ],
   "keywords": [
-    "codex",
-    "usage",
-    "rate limit",
-    "status bar",
-    "chatgpt",
+    "ai usage",
+    "usage monitor",
     "quota",
-    "developer tools"
+    "rate limit",
+    "rate limits",
+    "reset time",
+    "token usage",
+    "codex",
+    "chatgpt",
+    "claude code",
+    "github copilot",
+    "grok",
+    "privacy",
+    "developer tools",
+    "status bar",
+    "usage dashboard"
   ],
   "icon": "assets/icon.png",
   "galleryBanner": {

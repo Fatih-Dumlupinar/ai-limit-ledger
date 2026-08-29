@@ -1,5 +1,9 @@
 # Support
 
+For anything not answered below, open a
+[GitHub Issue](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/issues). Do not open a public
+issue for a security vulnerability — see [SECURITY.md](SECURITY.md) for private reporting.
+
 For missing insights, check `aiLimitLedger.dashboard.insightsMode` and the provider’s source/provenance label. `summary`, `detailed`, and `hidden` change rendering only and do not trigger refreshes. A missing Copilot denominator, Grok product breakdown, or Claude account/session field is an upstream limitation and is shown as unavailable rather than estimated. Codex daily insights retain at most 30 normalized days and display the latest 14 by default.
 
 For settings issues, run **AI Limit Ledger: Copy Redacted Effective Settings** and attach that output together with **Copy Redacted Diagnostics**. It includes normalized display/provider/refresh/cache state and safe validation codes, but never executable paths, tokens, credentials, account identifiers, raw commands, or workspace paths. **Reset Display Settings** changes only presentation preferences; it does not change provider selection, credentials, or experimental consent.

@@ -28,6 +28,18 @@ Gitleaks downloads, publish steps, and VSIX packaging regressions. See
 [docs/CI-SECURITY-DESIGN.md](docs/CI-SECURITY-DESIGN.md) and
 [docs/BRANCH-RULESET.md](docs/BRANCH-RULESET.md) for the repository policy.
 
+## Marketplace listing preparation (Task 13)
+
+Task 13 changes `package.json`'s `publisher` from `local` to the real Marketplace publisher ID
+`fatihdumlupinar-dev` and adds Marketplace listing/asset documentation. It does not publish to the
+Marketplace, does not create or store a publishing token/PAT, and does not touch SecretStorage,
+provider credentials, or any user's existing extension installation. `scripts/release-audit.mjs`
+was extended with Marketplace-specific checks (publisher identity, extension ID, keyword/category
+policy, HTTPS-only image links, no local/absolute paths, no publish-workflow files, no `vsce
+publish` invocation anywhere in the source tree) so a future accidental regression is caught before
+packaging, not discovered at publish time. See `docs/MARKETPLACE-PREFLIGHT.md` for the full manual
+checklist and `PUBLISHING.md` for the installation-identity-change note.
+
 ## Supported Node LTS and dependency remediation (0.6.2)
 
 No user-facing feature change. Development-only: the project now targets a supported Node LTS
