@@ -1,15 +1,24 @@
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   MARKETPLACE_SCREENSHOT_FILENAME_PATTERN,
+  MAX_SCREENSHOT_BYTES,
   ABSOLUTE_PATH_PATTERNS,
   KNOWN_SAFE_FIXTURE_MARKERS,
+  validateScreenshotFile,
+  scanMarketplaceScreenshots,
   // @ts-expect-error -- plain ES module, no type declarations
 } from '../scripts/release-audit.mjs';
 
 const ROOT = resolve(__dirname, '..');
+const PNG_SIGNATURE = Buffer.from('89504e470d0a1a0a', 'hex');
+
+function makePngBuffer(extraAscii = ''): Buffer {
+  return Buffer.concat([PNG_SIGNATURE, Buffer.from(extraAscii, 'latin1'), Buffer.alloc(32)]);
+}
 
 function sha256(buffer: Buffer): string {
   return createHash('sha256').update(buffer).digest('hex');
@@ -146,12 +155,12 @@ describe('Task 13: asset inventory lists every planned screenshot file', () => {
     expect(inventory).toContain(file);
   });
 
-  it('points to the screenshot runbook for how the pending files will be produced', () => {
+  it('points to the screenshot runbook describing how the optional files could be produced', () => {
     expect(inventory).toContain('MARKETPLACE-SCREENSHOT-RUNBOOK.md');
   });
 
   it('does not claim a screenshot is already included in the VSIX before it exists', () => {
-    // Every screenshot row's "Included in VSIX" column must read "No" while pending.
+    // Every screenshot row's "Included in VSIX" column must read "No" while absent.
     const rows = inventory
       .split('\n')
       .filter((line) => line.includes('assets/marketplace/') && line.trim().startsWith('|'));
@@ -159,5 +168,192 @@ describe('Task 13: asset inventory lists every planned screenshot file', () => {
     for (const row of rows) {
       expect(row).toMatch(/\|\s*No\b[^|]*\|\s*$/);
     }
+  });
+});
+
+describe('Task 13.1: screenshots are documented as optional, not a publish blocker', () => {
+  const listing = readFileSync(resolve(ROOT, 'docs/MARKETPLACE-LISTING.md'), 'utf8');
+  const inventory = readFileSync(resolve(ROOT, 'docs/MARKETPLACE-ASSET-INVENTORY.md'), 'utf8');
+  const preflight = readFileSync(resolve(ROOT, 'docs/MARKETPLACE-PREFLIGHT.md'), 'utf8');
+  const runbook = readFileSync(resolve(ROOT, 'docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md'), 'utf8');
+  const publishing = readFileSync(resolve(ROOT, 'PUBLISHING.md'), 'utf8');
+
+  const forbiddenPhrases = [
+    /open blocker/i,
+    /required before (Task 14|real publish|publish)/i,
+    /still missing/i,
+    /must be completed before publish/i,
+    /screenshots?\s+(is|are)\s+pending/i,
+  ];
+
+  it.each([
+    ['docs/MARKETPLACE-LISTING.md', () => listing],
+    ['docs/MARKETPLACE-ASSET-INVENTORY.md', () => inventory],
+    ['docs/MARKETPLACE-PREFLIGHT.md', () => preflight],
+    ['docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md', () => runbook],
+    ['PUBLISHING.md', () => publishing],
+  ])('%s contains no publish-blocker language about screenshots', (_name, getContent) => {
+    const content = getContent();
+    for (const pattern of forbiddenPhrases) {
+      expect(content).not.toMatch(pattern);
+    }
+  });
+
+  it('the listing explicitly states screenshots are optional', () => {
+    expect(listing).toMatch(/optional/i);
+  });
+
+  it('the asset inventory explicitly states screenshots are optional, not required', () => {
+    expect(inventory).toMatch(/optional/i);
+  });
+
+  it('the preflight checklist marks screenshots as optional and not a release gate', () => {
+    expect(preflight).toMatch(/Optional: real product screenshots may be added later\./);
+  });
+
+  it('the preflight checklist keeps every other required-item section intact', () => {
+    for (const requiredSection of [
+      '## Publisher identity',
+      '## Extension identity',
+      '## Version',
+      '## README',
+      '## License',
+      '## Privacy',
+      '## Security',
+      '## Support',
+      '## Changelog',
+      '## VSIX audit',
+    ]) {
+      expect(preflight).toContain(requiredSection);
+    }
+  });
+
+  it('the runbook frames itself as an optional future enhancement, not a requirement', () => {
+    expect(runbook).toMatch(/optional/i);
+    expect(runbook).toMatch(/not required to publish/i);
+  });
+
+  it('the runbook still forbids AI-generated or hand-drawn fake product screens', () => {
+    expect(runbook).toMatch(/AI image model|hand-draw/i);
+  });
+});
+
+describe('Task 13.1: validateScreenshotFile — per-file policy checks (pure, synthetic buffers)', () => {
+  it('accepts a well-formed screenshot: real PNG signature, allowed filename, under the size budget', () => {
+    const issues = validateScreenshotFile('dashboard-dark-en.png', makePngBuffer());
+    expect(issues).toEqual([]);
+  });
+
+  it('flags an invalid PNG signature', () => {
+    const bogus = Buffer.from('this is definitely not a png file', 'utf8');
+    const issues = validateScreenshotFile('dashboard-dark-en.png', bogus);
+    expect(issues.some((i: string) => i.includes('not a valid PNG signature'))).toBe(true);
+  });
+
+  it('flags a screenshot over the size budget', () => {
+    const oversized = Buffer.concat([PNG_SIGNATURE, Buffer.alloc(MAX_SCREENSHOT_BYTES + 1)]);
+    const issues = validateScreenshotFile('dashboard-dark-en.png', oversized);
+    expect(issues.some((i: string) => i.includes('exceeds the'))).toBe(true);
+  });
+
+  it('flags a disallowed filename even when the PNG itself is valid', () => {
+    const issues = validateScreenshotFile('Dashboard Dark.png', makePngBuffer());
+    expect(issues.some((i: string) => i.includes('filename does not match'))).toBe(true);
+  });
+
+  it('flags a real-looking personal path embedded in the file bytes', () => {
+    const realPath = ['C:', '\\Us', 'ers\\', 'realusername', '\\Desktop'].join('');
+    const withPath = makePngBuffer(`tEXt ${realPath}`);
+    const issues = validateScreenshotFile('dashboard-dark-en.png', withPath);
+    expect(issues.some((i: string) => i.includes('possible personal path'))).toBe(true);
+  });
+
+  it('does not flag a fixture-marked path embedded in the file bytes', () => {
+    const withFixturePath = makePngBuffer('tEXt C:\\Users\\fixture\\workspace');
+    const issues = validateScreenshotFile('dashboard-dark-en.png', withFixturePath);
+    expect(issues.some((i: string) => i.includes('possible personal path'))).toBe(false);
+  });
+
+  it('flags credential-shaped content embedded in the file bytes', () => {
+    const ghpPrefix = ['gh', 'p_'].join(''); // split so this file's own text never matches the pattern
+    const withToken = makePngBuffer(`tEXt token=${ghpPrefix}abcdefghijklmnopqrstuvwx`);
+    const issues = validateScreenshotFile('dashboard-dark-en.png', withToken);
+    expect(issues.some((i: string) => i.includes('possible credential-shaped content'))).toBe(true);
+  });
+});
+
+describe('Task 13.1: scanMarketplaceScreenshots — directory-level pass/fail behavior', () => {
+  const tempDirs: string[] = [];
+
+  function makeTempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'ail-screenshot-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a missing directory is a pass, not a warn or fail', async () => {
+    const dir = join(tmpdir(), 'ail-screenshot-test-does-not-exist-' + Date.now());
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('pass');
+  });
+
+  it('an empty directory is a pass, not a warn or fail', async () => {
+    const dir = makeTempDir();
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('pass');
+  });
+
+  it('the real repository has none of the five planned screenshots yet, and that is a pass', async () => {
+    const result = await scanMarketplaceScreenshots(resolve(ROOT, 'assets/marketplace'));
+    expect(result.severity).toBe('pass');
+  });
+
+  it('a single valid screenshot is a pass, and only that file is validated/reported', async () => {
+    const dir = makeTempDir();
+    writeFileSync(join(dir, 'dashboard-dark-en.png'), makePngBuffer());
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('pass');
+    expect(result.summary).toMatch(/^1 Marketplace screenshot/);
+  });
+
+  it('an invalid PNG among the files is a fail', async () => {
+    const dir = makeTempDir();
+    writeFileSync(join(dir, 'dashboard-dark-en.png'), Buffer.from('not a png', 'utf8'));
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('fail');
+    expect(result.details.some((d: string) => d.includes('not a valid PNG signature'))).toBe(true);
+  });
+
+  it('an oversized screenshot is a fail', async () => {
+    const dir = makeTempDir();
+    writeFileSync(
+      join(dir, 'dashboard-dark-en.png'),
+      Buffer.concat([PNG_SIGNATURE, Buffer.alloc(MAX_SCREENSHOT_BYTES + 1)]),
+    );
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('fail');
+    expect(result.details.some((d: string) => d.includes('exceeds the'))).toBe(true);
+  });
+
+  it('a screenshot with personal-path-shaped metadata is a fail', async () => {
+    const dir = makeTempDir();
+    const realPath = ['C:', '\\Us', 'ers\\', 'realusername', '\\Desktop'].join('');
+    writeFileSync(join(dir, 'dashboard-dark-en.png'), makePngBuffer(`tEXt ${realPath}`));
+    const result = await scanMarketplaceScreenshots(dir);
+    expect(result.severity).toBe('fail');
+    expect(result.details.some((d: string) => d.includes('possible personal path'))).toBe(true);
+  });
+
+  it('non-screenshot policy checks (icon/publisher/version/etc.) are unaffected by this directory being absent', () => {
+    // Sanity guard: scanning an absent screenshot directory must not throw or otherwise disturb
+    // any other part of the audit — the pure function only ever inspects the one directory given.
+    expect(async () => scanMarketplaceScreenshots(join(tmpdir(), 'does-not-exist'))).not.toThrow();
   });
 });

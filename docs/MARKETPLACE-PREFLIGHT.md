@@ -40,11 +40,15 @@ Check every box against the actual state of the branch/tag being published, not 
 
 ## Screenshots
 
-- [ ] All five files listed in `docs/MARKETPLACE-ASSET-INVENTORY.md` exist, were produced via
-      `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`, and contain only synthetic/disposable-account data.
-- [ ] Each screenshot has a real SHA-256/dimensions/size recorded in the asset inventory.
-- [ ] No screenshot shows a real username, email, file path, account ID, or unredacted quota value
-      from a primary account.
+**Optional: real product screenshots may be added later.** The VS Code Marketplace has no manifest
+field for screenshots and no publishing rule that requires them — this is not a publish gate, and a
+missing screenshot must never block or delay a release.
+
+- [ ] (Only if any screenshot exists) Each screenshot was produced via
+      `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` and contains only synthetic/disposable-account data,
+      never a real username, email, file path, account ID, or unredacted quota value.
+- [ ] (Only if any screenshot exists) It has a real SHA-256/dimensions/size recorded in
+      `docs/MARKETPLACE-ASSET-INVENTORY.md`.
 
 ## Links
 

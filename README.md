@@ -16,10 +16,12 @@ section below is the current, honest list of gaps.
 
 ## Screenshots
 
-Marketplace screenshots are being prepared and are not embedded in this README yet — see
-[`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md) for how they
-will be produced (real extension renderer, synthetic fixture data only, no real account/usage
-data). No mockups or placeholder images are used in the meantime.
+This README does not currently include screenshots — that's optional, not a gap. The sections
+below (features, provider matrix, privacy, settings, commands) describe the extension in full.
+Real product screenshots, taken from the actual extension UI with synthetic fixture data only, may
+be added in a future documentation-only update; see
+[`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md) for that
+optional process. No mockups, AI-generated images, or placeholders are ever used.
 
 ## Why AI Limit Ledger?
 
@@ -311,16 +313,15 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 - Grok Free accounts may not receive a numeric usage percentage from the billing capability at all.
 - Some `npm audit` findings may appear in the future in dev-only tooling (`vitest`/`vite` chain); production dependencies are and will remain zero.
 - Windows is the primary development and test target for the Claude status-line wrapper; macOS/Linux chaining has an explicit best-effort fallback rather than full parity.
-- Marketplace screenshots are not yet produced — see [Screenshots](#screenshots).
 
 ## Roadmap
 
 The items below are **planned, not committed**, and may change:
 
 - Additional branch protection/ruleset configuration after the Task 12 PR is reviewed.
-- A Visual Studio Code Marketplace publish, once the Task 13 preflight checklist
-  (`docs/MARKETPLACE-PREFLIGHT.md`) is complete and screenshots are produced, with a GitHub
-  Release-based install path.
+- A Visual Studio Code Marketplace publish, once the `docs/MARKETPLACE-PREFLIGHT.md` checklist is
+  complete, with a GitHub Release-based install path. Screenshots are an optional, separate
+  enhancement (see [Screenshots](#screenshots)) and are not a precondition for this.
 - Additional provider support may be considered in the future; nothing beyond Codex, Claude Code, GitHub Copilot, and Grok is currently planned or implemented.
 
 ## Non-affiliation

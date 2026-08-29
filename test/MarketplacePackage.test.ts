@@ -27,6 +27,8 @@ describe('Task 13: VSIX denylist covers new Marketplace-prep paths', () => {
     'extension/docs/MARKETPLACE-ASSET-INVENTORY.md',
     'extension/docs/MARKETPLACE-PREFLIGHT.md',
     'extension/docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md',
+    'extension/.claude/scheduled_tasks.lock', // Task 13.1: found actually leaking into a real VSIX
+    'extension/.claude/settings.local.json',
   ])('flags %s as denylisted', (name) => {
     expect(denied(name)).toBe(true);
   });
@@ -108,6 +110,10 @@ describe('Task 13: .vscodeignore excludes Marketplace-prep-only content from the
     expect(vscodeignore).toMatch(/^scripts\/\*\*$/m);
     expect(vscodeignore).toMatch(/^\.github\/\*\*$/m);
   });
+
+  it('excludes .claude/ (editor/agent-tooling scratch state, found leaking into a real VSIX)', () => {
+    expect(vscodeignore).toMatch(/^\.claude\/\*\*$/m);
+  });
 });
 
 describe('Task 13: if a current-version VSIX has been built, it reflects the new identity', () => {
@@ -137,7 +143,7 @@ describe('Task 13: if a current-version VSIX has been built, it reflects the new
     expect(`${packaged.publisher}.${packaged.name}`).toBe(EXPECTED_EXTENSION_ID);
   });
 
-  it('packaged VSIX does not include scripts/, test/, .github/, or assets/marketplace/', () => {
+  it('packaged VSIX does not include scripts/, test/, .github/, .claude/, or assets/marketplace/', () => {
     if (!existsSync(vsixPath)) {
       expect(existsSync(vsixPath)).toBe(false);
       return;
@@ -149,6 +155,7 @@ describe('Task 13: if a current-version VSIX has been built, it reflects the new
         e.fileName.startsWith('extension/scripts/') ||
         e.fileName.startsWith('extension/test/') ||
         e.fileName.startsWith('extension/.github/') ||
+        e.fileName.startsWith('extension/.claude/') ||
         e.fileName.startsWith('extension/assets/marketplace/'),
     );
     expect(forbidden.map((e) => e.fileName)).toEqual([]);

@@ -1,21 +1,29 @@
-# Marketplace screenshot runbook
+# Marketplace screenshot runbook (optional future enhancement)
 
-## Why this document exists
+## What this document is
 
-Task 13 prepares the Marketplace listing but does not fabricate product screenshots. This
-non-interactive environment has no attached display, no VS Code Extension Development Host that
-can be driven end-to-end, and no browser/GUI automation tool available to the agent that performed
-this preparation — so no `assets/marketplace/*.png` files were generated or committed as part of
-this task. Fabricating a "screenshot" by hand-drawing a UI mockup was explicitly out of scope,
-since it would misrepresent the actual product.
+This is a guide for an **optional, future, documentation-only enhancement**: adding real product
+screenshots to the Marketplace listing. Screenshots are not required to publish this extension —
+the VS Code Marketplace has no manifest field for them and no publishing rule that requires them
+(confirmed against the current official publishing/extension-manifest documentation). The listing
+is complete and publishable today from `README.md` content alone, without any image.
 
-This runbook lets a human with a normal desktop VS Code install produce the real screenshots
-safely, using synthetic fixture data only — no real provider account, credential, or usage data.
+Nobody is required to complete this runbook, on any timeline. If it is never done, that changes
+nothing about whether the extension can be published.
 
-## What is still missing
+This non-interactive preparation environment has no attached display, no VS Code Extension
+Development Host that can be driven end-to-end, and no browser/GUI automation tool — so no
+`assets/marketplace/*.png` files were generated here. If screenshots are added later, they must
+come from a human with a normal desktop VS Code install following the steps below, using synthetic
+fixture data only. Fabricating a "screenshot" by hand-drawing a UI mockup, or by generating one with
+an AI image model, is never acceptable — it would misrepresent the actual product and must not be
+done regardless of who or what performs this runbook.
 
-The following files are referenced by `docs/MARKETPLACE-LISTING.md` and
-`docs/MARKETPLACE-ASSET-INVENTORY.md` as **pending** until this runbook is completed:
+## Optional files this runbook can produce
+
+If someone chooses to complete this runbook, it produces the following five files (referenced as
+"planned, not required" entries in `docs/MARKETPLACE-LISTING.md` and
+`docs/MARKETPLACE-ASSET-INVENTORY.md`):
 
 - `assets/marketplace/dashboard-dark-en.png`
 - `assets/marketplace/dashboard-light-en.png`
@@ -23,8 +31,8 @@ The following files are referenced by `docs/MARKETPLACE-LISTING.md` and
 - `assets/marketplace/safe-dashboard-en.png`
 - `assets/marketplace/statusbar-tooltip-en.png`
 
-Treat this as an open blocker before any real Marketplace publish (Task 14) — see the PR
-description for this task and `docs/MARKETPLACE-PREFLIGHT.md`.
+Adding them is never a precondition for any future Marketplace publish — see
+`docs/MARKETPLACE-PREFLIGHT.md`'s Screenshots section.
 
 ## Ground rules (do not violate)
 

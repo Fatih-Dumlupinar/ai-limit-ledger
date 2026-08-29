@@ -426,6 +426,11 @@ export const VSIX_DENYLIST_PATTERNS = [
   // extension (Task 13).
   /^extension\/test\//,
   /^extension\/\.github\//,
+  // Editor/agent-tooling scratch state (e.g. a local Claude Code session lock file) — never part
+  // of the project's source and must never leak into a packaged VSIX (Task 13.1 found this
+  // actually happening: an untracked, globally-gitignored `.claude/scheduled_tasks.lock` was
+  // getting packaged because .vscodeignore had no rule for it).
+  /^extension\/\.claude\//,
   // Marketplace listing screenshots and internal Marketplace-prep docs live in the repository for
   // the Marketplace page / provenance, not inside the installable package (Task 13) — see
   // docs/MARKETPLACE-ASSET-INVENTORY.md's "VSIX packaging policy" section.
@@ -993,6 +998,51 @@ function checkReadmeImageLinks() {
   }
 }
 
+/**
+ * Returns every `assets/marketplace/...` path referenced by a Markdown image link in `content`
+ * for which `existsChecker(relPath)` returns false. Pure (no filesystem access itself), so tests
+ * can pass synthetic README content and a fake existence checker instead of touching real files.
+ */
+export function findMissingScreenshotLinks(content, existsChecker) {
+  const missing = [];
+  const imgPattern = /!\[[^\]]*\]\((assets\/marketplace\/[^)]+)\)/g;
+  let m;
+  while ((m = imgPattern.exec(content))) {
+    if (!existsChecker(m[1])) missing.push(m[1]);
+  }
+  return missing;
+}
+
+function checkReadmeScreenshotLinksNotBroken() {
+  // Screenshots are optional (Task 13.1) — this check only guards against a *dangling* reference:
+  // a README that links to assets/marketplace/<file>.png which does not exist on disk. When no
+  // screenshots exist at all, README.md/README.tr.md simply have no such links (verified
+  // separately in checkReadmeImageLinks-adjacent tests), which trivially passes here too.
+  const files = ['README.md', 'README.tr.md'];
+  const broken = [];
+  for (const file of files) {
+    const content = readFileSync(path.join(ROOT, file), 'utf8');
+    const missing = findMissingScreenshotLinks(content, (relPath) =>
+      existsSync(path.join(ROOT, relPath)),
+    );
+    broken.push(...missing.map((relPath) => `${file}: references missing ${relPath}`));
+  }
+  if (broken.length === 0) {
+    record(
+      'marketplace-readme-screenshot-links',
+      'pass',
+      'README.md/README.tr.md reference no missing assets/marketplace screenshot files.',
+    );
+  } else {
+    record(
+      'marketplace-readme-screenshot-links',
+      'fail',
+      'README references a Marketplace screenshot file that does not exist on disk',
+      broken,
+    );
+  }
+}
+
 export const PUBLISH_INVOCATION_PATTERN = /vsce\s+publish|vsce\.publish\s*\(|ovsx\s+publish/;
 
 async function checkNoPublishAutomation() {
@@ -1057,58 +1107,94 @@ function checkNoEnvFile() {
 }
 
 export const MARKETPLACE_SCREENSHOT_FILENAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*\.png$/;
-const MAX_SCREENSHOT_BYTES = 1024 * 1024; // 1 MB budget per Marketplace screenshot
+export const MAX_SCREENSHOT_BYTES = 1024 * 1024; // 1 MB budget per Marketplace screenshot
 
-async function checkMarketplaceScreenshotAssets() {
-  const dir = 'assets/marketplace';
-  if (!existsSync(path.join(ROOT, dir))) {
-    record(
-      'marketplace-screenshots',
-      'warn',
-      'No assets/marketplace/ directory yet — screenshots pending, see docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md.',
+/**
+ * Validates one screenshot's bytes/filename in isolation (pure — no filesystem access, no
+ * `record()` side effect), so it can be exercised directly by tests against synthetic buffers.
+ * Returns an array of human-readable issue strings; empty means the file passes every check.
+ */
+export function validateScreenshotFile(fileName, buffer) {
+  const issues = [];
+  const isPng = buffer.length > 8 && buffer.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
+  if (!isPng) issues.push(`${fileName}: not a valid PNG signature`);
+  if (buffer.length > MAX_SCREENSHOT_BYTES) {
+    issues.push(
+      `${fileName}: ${buffer.length} bytes exceeds the ${MAX_SCREENSHOT_BYTES} byte budget`,
     );
-    return;
   }
-  const entries = await readdir(path.join(ROOT, dir));
+  if (!MARKETPLACE_SCREENSHOT_FILENAME_PATTERN.test(fileName)) {
+    issues.push(`${fileName}: filename does not match the lowercase-kebab-case.png policy`);
+  }
+  // Scan raw bytes (including any embedded tEXt/iTXt metadata) as Latin-1 text for
+  // personal-path-shaped and credential/token-shaped content.
+  const text = buffer.toString('latin1');
+  for (const pattern of ABSOLUTE_PATH_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text) && !KNOWN_SAFE_FIXTURE_MARKERS.test(text)) {
+      issues.push(`${fileName}: possible personal path found in PNG bytes/metadata`);
+    }
+  }
+  for (const { name, pattern } of CREDENTIAL_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text) && !KNOWN_SAFE_FIXTURE_MARKERS.test(text)) {
+      issues.push(
+        `${fileName}: possible credential-shaped content found in PNG bytes/metadata [${name}]`,
+      );
+    }
+  }
+  return issues;
+}
+
+/**
+ * Scans a directory of (optional) Marketplace screenshots and returns a {severity, summary,
+ * details} result — pure with respect to `record()` (the caller decides how to report it), so
+ * tests can point this at an isolated temp directory instead of the real `assets/marketplace/`.
+ *
+ * Screenshots are an optional Marketplace enhancement (Task 13.1) — there is no manifest field for
+ * them and no VS Code/Marketplace publishing requirement that they exist (see
+ * docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md). Their absence is therefore always "pass", never
+ * "warn"/"fail" — only files that *are* present get validated, and only a genuine policy violation
+ * on a present file produces anything other than pass.
+ */
+export async function scanMarketplaceScreenshots(absoluteDir) {
+  if (!existsSync(absoluteDir)) {
+    return {
+      severity: 'pass',
+      summary:
+        'No Marketplace screenshots present — screenshots are optional and this is a fully supported state. See docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md if adding real ones later.',
+    };
+  }
+  const entries = await readdir(absoluteDir);
   const pngFiles = entries.filter((f) => f.toLowerCase().endsWith('.png'));
   if (pngFiles.length === 0) {
-    record(
-      'marketplace-screenshots',
-      'warn',
-      'assets/marketplace/ exists but contains no PNG files yet.',
-    );
-    return;
+    return {
+      severity: 'pass',
+      summary:
+        'assets/marketplace/ exists but contains no screenshots yet — optional, fully supported state.',
+    };
   }
   const issues = [];
   for (const file of pngFiles) {
-    const full = path.join(ROOT, dir, file);
-    const buf = readFileSync(full);
-    const isPng = buf.length > 8 && buf.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
-    if (!isPng) issues.push(`${file}: not a valid PNG signature`);
-    if (buf.length > MAX_SCREENSHOT_BYTES) {
-      issues.push(`${file}: ${buf.length} bytes exceeds the ${MAX_SCREENSHOT_BYTES} byte budget`);
-    }
-    if (!MARKETPLACE_SCREENSHOT_FILENAME_PATTERN.test(file)) {
-      issues.push(`${file}: filename does not match the lowercase-kebab-case.png policy`);
-    }
-    // Scan raw bytes for personal-path-shaped ASCII text embedded as PNG metadata (tEXt/iTXt).
-    const text = buf.toString('latin1');
-    for (const pattern of ABSOLUTE_PATH_PATTERNS) {
-      pattern.lastIndex = 0;
-      if (pattern.test(text) && !KNOWN_SAFE_FIXTURE_MARKERS.test(text)) {
-        issues.push(`${file}: possible personal path found in PNG bytes/metadata`);
-      }
-    }
+    const buf = readFileSync(path.join(absoluteDir, file));
+    issues.push(...validateScreenshotFile(file, buf));
   }
   if (issues.length === 0) {
-    record(
-      'marketplace-screenshots',
-      'pass',
-      `${pngFiles.length} Marketplace screenshot(s) pass format/size/filename/personal-data checks.`,
-    );
-  } else {
-    record('marketplace-screenshots', 'fail', 'Marketplace screenshot policy violation(s)', issues);
+    return {
+      severity: 'pass',
+      summary: `${pngFiles.length} Marketplace screenshot(s) present and pass format/size/filename/personal-data/credential checks.`,
+    };
   }
+  return {
+    severity: 'fail',
+    summary: 'Marketplace screenshot policy violation(s)',
+    details: issues,
+  };
+}
+
+async function checkMarketplaceScreenshotAssets() {
+  const result = await scanMarketplaceScreenshots(path.join(ROOT, 'assets/marketplace'));
+  record('marketplace-screenshots', result.severity, result.summary, result.details);
 }
 
 function checkPackagedReadmeImages(vsixResult) {
@@ -1165,6 +1251,7 @@ async function main() {
   checkNonAffiliationStatement();
   checkNoOverstatedClaims();
   checkReadmeImageLinks();
+  checkReadmeScreenshotLinksNotBroken();
   await checkNoPublishAutomation();
   checkNoEnvFile();
   await checkMarketplaceScreenshotAssets();
