@@ -51,7 +51,7 @@ Copilot refreshes are single-flighted, machine-leased, rate-limit aware, and pre
 
 ## Grok Build (0.4.0)
 
-Grok is disabled until explicit user action. When enabled, the only process entry point is the official `grok agent stdio` ACP process. The experimental `x.ai/billing` method is capability-probed and `-32601` is cached per CLI version; it is not treated as an official usage endpoint. AI Limit Ledger never reads Grok auth files, tokens, prompts, transcripts, code, or runs `grok login` without a click. Stdio responses are size-limited, stderr is redacted, unknown notifications are ignored, and the process is disposed on deactivation.
+Grok is disabled until explicit user action. When enabled, the only process entry point is the official Grok Build ACP transport (`grok agent stdio`). The experimental `x.ai/billing` capability is capability-probed and `-32601` is cached per CLI version; it is not treated as an official usage endpoint. The CLI-proxy fallback is separate, experimental, and opt-in. `/usage` is only the official account view run by the user inside Grok Build; AI Limit Ledger does not run it automatically. AI Limit Ledger never reads Grok auth files, tokens, prompts, transcripts, code, or runs `grok login` without a click. Stdio responses are size-limited, stderr is redacted, unknown notifications are ignored, and the process is disposed on deactivation.
 
 ## Chained status-line wrapper (0.3.2+)
 
@@ -83,6 +83,6 @@ This usage request is not model generation and does not consume a prompt/token b
 
 **Do not open a public GitHub issue for a security vulnerability.** Report it privately using [GitHub's private vulnerability reporting](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/security/advisories/new) for this repository.
 
-Do not include credentials, tokens, or raw provider responses in your report; redact any screenshot before attaching it. This extension intentionally does not read Codex authentication files, accepts no tokens, and runs only a configured absolute CLI path or the `codex` command from the system PATH.
+Do not include credentials, tokens, or raw provider responses in your report; redact any screenshot before attaching it. The Codex provider does not read Codex authentication files or accept user-supplied tokens. It uses only the configured Codex executable or the `codex` command resolved from the system PATH.
 
 This is a solo-maintained project without a dedicated security team; there is no guaranteed response-time SLA, but reports are read and triaged as they arrive. Supported version: the latest published release only — older versions do not receive security fixes.

@@ -10,7 +10,7 @@ Provider Usage Insights are stored only as typed, provider-scoped allowlisted va
 
 Settings use one typed effective snapshot. Diagnostics retain only safe keys/categories; executable values become `auto` or `configured` in copied support data. Workspace attempts to override machine-scoped paths are ignored. Last-known-good usage caches contain allowlisted percentages/reset times only and are hidden after the configured age unless expired-cache display is explicitly enabled. No credentials are stored by settings migration or refresh scheduling.
 
-Claude Code support is opt-in. By default, the extension never reads Claude credential files, browser sessions, organization IDs, Keychain/Credential Manager data, `auth.json`, repository details, or paths. Its status-line bridge allowlists documented fields and writes only a local sanitized snapshot. Copilot and Grok are independent providers and do not share credentials or provider state.
+Claude Code status-line support is opt-in. The official status-line integration does not read Claude credential files, browser sessions, organization IDs, Keychain/Credential Manager data, `auth.json`, repository details, or paths. Its status-line bridge allowlists documented fields and writes only a local sanitized snapshot. Copilot and Grok are independent providers and do not share credentials or provider state.
 
 Runtime language changes are presentation-only. Rich/Safe dashboards, status bar text, tooltips, notifications, and pickers are rebuilt from cached snapshots; changing `display.language` does not refresh a provider, read credentials, start a CLI/App Server process, or make a network request. Command Palette and Settings contribution localization is owned by VS Code's extension manifest loading and follows the VS Code display language.
 
@@ -22,7 +22,7 @@ If no allowance is returned by GitHub, `auto` mode shows used credits only and d
 
 ## Grok Build (0.4.0)
 
-Grok usage is disabled by default and requires **Enable Grok Usage**. After the user installs and logs into the official Grok Build CLI, AI Limit Ledger can start its own `grok agent stdio` process to request the experimental `x.ai/billing` ACP extension. It does not read `~/.grok/auth.json`, tokens, prompts, transcripts, code, or run login automatically. The community VS Code extension, when present, is reported as community-only and is not used as an official source.
+Grok usage is disabled by default and requires **Enable Grok Usage**. After the user installs and logs into the official Grok Build CLI, AI Limit Ledger can start its own `grok agent stdio` process through the official Grok Build ACP transport to request the experimental `x.ai/billing` capability. The CLI-proxy fallback is separate, experimental, and opt-in. `/usage` is only the official account view that the user runs inside Grok Build; AI Limit Ledger does not run `/usage` automatically. It does not read `~/.grok/auth.json`, tokens, prompts, transcripts, code, or run login automatically. The community VS Code extension, when present, is reported as community-only and is not used as an official source.
 
 The one exception is the separate, off-by-default, explicitly-consented "CLI-free Claude Usage" experimental transport described below — while it is enabled, it reads the OAuth access token (and only the access token) from Claude Code's own credential file. It is disabled unless you turn it on, and disabling it stops all credential access from this transport immediately.
 

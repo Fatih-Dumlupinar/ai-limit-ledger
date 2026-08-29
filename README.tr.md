@@ -2,11 +2,9 @@
 
 _[English](README.md)_
 
-AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok için AI kodlama kullanım limitlerini, kotaları, sıfırlanma pencerelerini ve sağlayıcı etkinliğini izlemeye yönelik, gizliliği önceleyen bir VS Code eklentisidir. Copilot, yalnızca GitHub kimlik doğrulamasından sonra veya açıkça sağlanan Plan-read ince taneli bir PAT ile resmi GitHub Billing REST API'sini kullanır. Grok kullanımı açıkça etkinleştirilene kadar kapalıdır ve resmi Grok Build CLI'nin deneysel `x.ai/billing` ACP uzantısını kullanır.
+AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok için AI kodlama kullanım limitlerini, kotaları, sıfırlanma pencerelerini ve sağlayıcı etkinliğini izlemeye yönelik, gizliliği önceleyen bir VS Code eklentisidir. Copilot, yalnızca GitHub kimlik doğrulamasından sonra veya açıkça sağlanan Plan-read ince taneli bir PAT ile resmi GitHub Billing REST API'sini kullanır. Grok kullanımı açıkça etkinleştirilene kadar kapalıdır; deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır ve CLI-proxy yedeği de deneysel ve isteğe bağlıdır.
 
-AI Limit Ledger bağımsız bir topluluk projesidir; OpenAI, Anthropic, Google veya xAI ile ilişkili değildir ve onlar tarafından onaylanmamıştır.
-
-**Resmî olmayan topluluk eklentisi. OpenAI ile ilişkili değildir ve OpenAI tarafından onaylanmamıştır.**
+AI Limit Ledger bağımsız bir topluluk projesidir; OpenAI, Anthropic, GitHub veya xAI ile bağlantılı değildir ve bu kuruluşlar tarafından desteklenmemektedir.
 
 AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok sağlayıcı durumlarını tek bir Dashboard'da ve VS Code durum çubuğunda gösterir. Sağlayıcı hataları birbirinden izole edilir; eksik bir CLI hiçbir zaman bir sağlayıcı kartını kaldırmaz.
 
@@ -14,12 +12,12 @@ AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok sağlayıcı durumla
 
 ## Desteklenen sağlayıcılar
 
-| Sağlayıcı      | Durum                                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------------------------- |
-| Codex          | Yalnızca resmî, yerel App Server                                                                      |
-| Claude Code    | Resmî status-line entegrasyonu; bir OAuth kullanım kontrolü **deneyseldir**, varsayılan olarak kapalı |
-| GitHub Copilot | Resmî GitHub Billing REST API                                                                         |
-| Grok           | Önce resmî ACP `x.ai/billing`; bir CLI-proxy yedeği **deneyseldir**, varsayılan olarak kapalı         |
+| Sağlayıcı      | Durum                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Codex          | Yalnızca resmî, yerel App Server                                                                                                    |
+| Claude Code    | Resmî status-line entegrasyonu; bir OAuth kullanım kontrolü **deneyseldir**, varsayılan olarak kapalı                               |
+| GitHub Copilot | Resmî GitHub Billing REST API                                                                                                       |
+| Grok           | Deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımı; CLI-proxy yedeği de **deneysel** ve isteğe bağlıdır |
 
 Tam kaynak, hesap/oturum içgörü kapsamı ve deneysel sınırlar için [sağlayıcı yetenek matrisine](docs/PROVIDER_CAPABILITY_MATRIX.md) bakın.
 
@@ -88,7 +86,7 @@ Ortak tipli içgörü modeli; hesap metriklerini, en son oturum metriklerini, g�
 - Codex yalnızca resmî App Server `account/read`, `account/rateLimits/read` (güncelleme bildirimi dahil) ve `account/usage/read`'i kullanır. Günlük kullanım sıralanır, yinelenen tarihler birleştirilir ve dahili olarak en fazla 30 gün tutulur; varsayılan görünüm son 14 gündür. Sıfırlanma kredileri ve gözlemlenen son kullanma tarihleri yalnızca görüntüleme amaçlıdır.
 - Claude'un resmî status-line anlık görüntüsü, hesap 5 saatlik/7 günlük limitlerini en son gözlemlenen CLI oturumundan ayrı tutar. Model, bağlam, girdi/çıktı/önbellek token'ları, tahmini maliyet, süreler, satır sayıları, fast/effort/thinking/output-style alanları açık izin listesi alanlarıdır. Deneysel OAuth hesap limitleri asla resmî oturum metriklerinin üzerine yazılmaz.
 - GitHub Copilot, AI kredilerini birincil metrik yapar. Bir ödenek yalnızca yetkiliyse veya açıkça kullanıcı tarafından yapılandırılmışsa gösterilir ve hesaplanmış olarak işaretlenir. Premium etkileşimler, sohbet ve tamamlamalar ayrı kalır; organizasyon yönetimi aylık bir payda değildir.
-- Grok önce resmî ACP `x.ai/billing`'i dener. CLI-proxy faturalama yedeği deneyseldir ve isteğe bağlıdır. Eksik ürün dökümleri, boş bir ürün dizisi yerine gösterilmemiş olarak kalır ve `/usage`, resmî Grok Build hesap görünümü için yalnızca kopyalama eylemidir.
+- Grok, deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır. CLI-proxy faturalama yedeği de deneyseldir ve isteğe bağlıdır. Eksik ürün dökümleri, boş bir ürün dizisi yerine gösterilmemiş olarak kalır; `/usage`, kullanıcının Grok Build içinde çalıştırdığı resmî hesap görünümüdür ve AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz.
 
 Kaynak ve sınırlama matrisi için `docs/PROVIDER_CAPABILITY_MATRIX.md` dosyasına bakın.
 
@@ -101,7 +99,7 @@ Kaynak ve sınırlama matrisi için `docs/PROVIDER_CAPABILITY_MATRIX.md` dosyas�
 5. Bir Claude Code yanıtını tamamlayın.
 6. **AI Limit Ledger: Open Dashboard** komutunu çalıştırın.
 
-`AI Limit Ledger: Enable Claude Code Integration`, bir PowerShell komutu değil, bir VS Code Komut Paleti girişidir — bunu bir terminalden değil `Ctrl+Shift+P`'den çalıştırırsınız. Eklenti asla Claude kimlik bilgilerini okumaz ve açık onayınız olmadan `statusLine`'ı asla değiştirmez.
+`AI Limit Ledger: Enable Claude Code Integration`, bir PowerShell komutu değil, bir VS Code Komut Paleti girişidir — bunu bir terminalden değil `Ctrl+Shift+P`'den çalıştırırsınız. Resmî status-line entegrasyonu Claude kimlik bilgilerini okumaz ve açık onayınız olmadan `statusLine`'ı asla değiştirmez. Ayrı, varsayılan olarak kapalı deneysel CLI'siz kullanım aktarımı ise yalnızca açık kullanıcı onayından sonra OAuth erişim belirtecini okuyabilir; ayrıntılar `PRIVACY.md` dosyasında açıklanmıştır.
 
 ### Entegrasyon modları
 
@@ -120,7 +118,7 @@ Yalnızca Claude Code VS Code kenar çubuğunu kullanıyorsanız ve hiçbir zama
 3. Claude Dashboard kartı artık `Account limits source: Experimental OAuth usage` gösterir; açıkça `Experimental — undocumented Anthropic usage endpoint` olarak etiketlenmiştir.
 4. İstediğiniz zaman tekrar kapatmak için **AI Limit Ledger: Disable CLI-free Claude Usage** çalıştırın; resmî status-line entegrasyonu hiçbir zaman etkilenmez.
 
-Bu, varsayılan olarak kapalıdır, hız sınırlamasına tabi olabilir ve Anthropic uç noktayı değiştirirse çalışmayı durdurabilir — `api.anthropic.com/api/oauth/usage`'ı çağırır; bu, Claude Code'un kendi `/usage` komutunun kullandığı aynı belgelenmemiş uç noktadır, genel bir API değildir. Tam ayrıntılar: `docs/EXPERIMENTAL_CLAUDE_USAGE.md` (eklentiyle birlikte paketlenir).
+Bu, varsayılan olarak kapalıdır, hız sınırlamasına tabi olabilir ve Anthropic uç noktayı değiştirirse çalışmayı durdurabilir — onaydan sonra yalnızca OAuth erişim belirtecini bellekte okur ve `api.anthropic.com/api/oauth/usage`'ı çağırır; bu, Claude Code'un kendi `/usage` komutunun kullandığı aynı belgelenmemiş uç noktadır, genel bir API değildir. Tam ayrıntılar: `docs/EXPERIMENTAL_CLAUDE_USAGE.md` (eklentiyle birlikte paketlenir).
 
 ## Resmî sağlayıcı bağlantıları
 
@@ -139,7 +137,7 @@ Mevcut etiketler **Open GitHub Copilot Billing** ve **Open Grok Billing**'dir. G
 
 ## Grok Build kullanımı
 
-**Enable Grok Usage** çalıştırana kadar Grok deneyseldir ve devre dışıdır. xAI/Grok Build kılavuzundan resmî CLI'yi kurun, açılan VS Code terminalinde `grok login` ile oturum açın, ardından **Recheck Grok Installation** çalıştırın. Topluluk `pawelhuryn.grok-vscode-phuryn` eklentisi yalnızca topluluk kaynaklı olarak algılanır ve asla resmî faturalama kaynağı olarak ele alınmaz. Resmî hesap görünümü için Grok Build içinde `/usage` kullanın.
+**Enable Grok Usage** çalıştırana kadar Grok kullanımı kapalıdır. xAI/Grok Build kılavuzundan resmî CLI'yi kurun, açılan VS Code terminalinde `grok login` ile oturum açın, ardından **Recheck Grok Installation** çalıştırın. Etkinleştirildiğinde AI Limit Ledger resmî Grok Build ACP aktarımını kullanır; `x.ai/billing` capability'si ve CLI-proxy faturalama yedeği deneyseldir, yedek isteğe bağlıdır. Topluluk `pawelhuryn.grok-vscode-phuryn` eklentisi yalnızca topluluk kaynaklı olarak algılanır ve asla resmî faturalama kaynağı olarak ele alınmaz. Resmî hesap görünümü için Grok Build içinde `/usage` kullanın; AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz.
 
 Başarılı bir Repair'dan sonra Claude kartı **Restart Claude CLI session** gösterir. Mevcut Claude CLI oturumlarını kapatın, tamamen yeni bir tane başlatın ve bir yanıtı tamamlayın. Geçerli bir anlık görüntü, yeniden başlatma/bekleme mesajını otomatik olarak kaldırır.
 

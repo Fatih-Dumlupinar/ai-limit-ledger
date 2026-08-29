@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Clarified the Claude credential boundary between the official status-line integration and the separate, explicit-consent experimental OAuth transport.
+- Corrected Grok ACP transport and `x.ai/billing` method provenance, including the experimental, opt-in CLI-proxy fallback.
+- Scoped the Codex token statement to the Codex provider and removed the repeated affiliation warning.
+- Recorded the current GitHub-native secret-scanning and push-protection availability for Task 12 planning.
+
 ## 0.6.2
 
 - **Task 10.1 — Supported Node LTS & Vitest Security Debt Remediation.** No user-facing feature changes; runtime provider behavior is unchanged. This closes out Task 10.

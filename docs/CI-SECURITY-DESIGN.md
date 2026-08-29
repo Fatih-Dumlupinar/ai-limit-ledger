@@ -97,9 +97,16 @@ dependencies, Dependabot's blast radius is inherently limited to build/test tool
 opens still has to pass the same `verify` workflow, including `npm run audit:release`, before
 merge.
 
+## Current GitHub availability
+
+At Task 11 completion, GitHub-native secret scanning and push protection were not offered in
+the repository settings available to the owner. Task 12 must therefore add an independent CI
+secret scan and evaluate a local/pre-commit safeguard without claiming that GitHub-native push
+protection is enabled. Native features should be re-evaluated if they become available later.
+
 ## Secret scanning (Task 12 configuration)
 
-Enable GitHub's built-in secret scanning and push protection once the repository is public
-(Task 11); `scripts/release-audit.mjs`'s local credential-pattern scan is a complementary,
-offline first line of defense for contributors working before a push, not a replacement for
-GitHub's own scanning.
+Task 12 must select and add an independent CI secret scan, then evaluate a local/pre-commit
+safeguard. The tool choice is intentionally not fixed by this design. The existing
+`scripts/release-audit.mjs` local credential-pattern scan remains a complementary offline check
+for contributors; it does not represent GitHub-native secret scanning or push protection.

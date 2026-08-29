@@ -2,11 +2,9 @@
 
 _[Türkçe](README.tr.md)_
 
-AI Limit Ledger is a privacy-first VS Code extension for monitoring AI coding usage limits, quotas, reset windows, and provider activity for Codex, Claude Code, GitHub Copilot, and Grok. Copilot uses the official GitHub Billing REST API only after GitHub authentication or an explicitly supplied Plan-read fine-grained PAT. Grok usage is off until explicitly enabled and uses the official Grok Build CLI's experimental `x.ai/billing` ACP extension.
+AI Limit Ledger is a privacy-first VS Code extension for monitoring AI coding usage limits, quotas, reset windows, and provider activity for Codex, Claude Code, GitHub Copilot, and Grok. Copilot uses the official GitHub Billing REST API only after GitHub authentication or an explicitly supplied Plan-read fine-grained PAT. Grok usage is off until explicitly enabled and uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability; the CLI-proxy fallback is also experimental and opt-in.
 
-AI Limit Ledger is an independent community project and is not affiliated with or endorsed by OpenAI, Anthropic, Google, or xAI.
-
-**Unofficial community extension. Not affiliated with or endorsed by OpenAI.**
+AI Limit Ledger is an independent community project and is not affiliated with or endorsed by OpenAI, Anthropic, GitHub, or xAI.
 
 AI Limit Ledger shows Codex, Claude Code, GitHub Copilot, and Grok provider states in one Dashboard and the VS Code status bar. Provider failures are isolated and a missing CLI never removes a provider card.
 
@@ -14,12 +12,12 @@ Hover for a Markdown usage table; click for a theme-aware provider dashboard wit
 
 ## Supported providers
 
-| Provider       | Status                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Codex          | Official, local App Server only                                                             |
-| Claude Code    | Official status-line integration; an OAuth usage check is **experimental**, off by default  |
-| GitHub Copilot | Official GitHub Billing REST API                                                            |
-| Grok           | Official ACP `x.ai/billing` first; a CLI-proxy fallback is **experimental**, off by default |
+| Provider       | Status                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex          | Official, local App Server only                                                                                                          |
+| Claude Code    | Official status-line integration; an OAuth usage check is **experimental**, off by default                                               |
+| GitHub Copilot | Official GitHub Billing REST API                                                                                                         |
+| Grok           | Official Grok Build ACP transport with an experimental `x.ai/billing` capability; CLI-proxy fallback is also **experimental** and opt-in |
 
 See the full [provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) for exact sources, account/session insight coverage, and experimental boundaries.
 
@@ -88,7 +86,7 @@ The common typed insights model keeps account metrics, latest-session metrics, d
 - Codex uses only official App Server `account/read`, `account/rateLimits/read` (including its update notification), and `account/usage/read`. Daily usage is sorted, duplicate dates are merged, and at most 30 days are retained internally; the default display is the latest 14 days. Reset credits and observed expiration dates are display-only.
 - Claude’s official status-line snapshot keeps account 5-hour/7-day limits separate from the latest observed CLI session. Model, context, input/output/cache tokens, estimated cost, durations, line counts, fast/effort/thinking/output-style fields are explicit allowlist fields. Experimental OAuth account limits never overwrite official session metrics.
 - GitHub Copilot makes AI credits the primary metric. An allowance is shown only when authoritative or explicitly user-configured and marked calculated. Premium interactions, chat, and completions remain separate; organization management is not a monthly denominator.
-- Grok tries official ACP `x.ai/billing` first. Its CLI-proxy billing fallback is experimental and opt-in. Missing product breakdowns remain not exposed rather than an empty product array, and `/usage` is a copy-only action for the official Grok Build account view.
+- Grok uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability. Its CLI-proxy billing fallback is also experimental and opt-in. Missing product breakdowns remain not exposed rather than an empty product array, and `/usage` is only the official Grok Build account view run by the user; AI Limit Ledger does not run `/usage` automatically.
 
 See `docs/PROVIDER_CAPABILITY_MATRIX.md` for the source and limitation matrix.
 
@@ -101,7 +99,7 @@ See `docs/PROVIDER_CAPABILITY_MATRIX.md` for the source and limitation matrix.
 5. Complete a Claude Code response.
 6. Run **AI Limit Ledger: Open Dashboard**.
 
-`AI Limit Ledger: Enable Claude Code Integration` is a VS Code Command Palette entry, not a PowerShell command — you run it from `Ctrl+Shift+P`, not a terminal. The extension never reads Claude credentials and never changes `statusLine` without your explicit confirmation.
+`AI Limit Ledger: Enable Claude Code Integration` is a VS Code Command Palette entry, not a PowerShell command — you run it from `Ctrl+Shift+P`, not a terminal. The official status-line integration never reads Claude credentials and never changes `statusLine` without your explicit confirmation. The separate, off-by-default experimental CLI-free usage transport may read only the OAuth access token after explicit user consent, as documented in `PRIVACY.md`.
 
 ### Integration modes
 
@@ -120,7 +118,7 @@ If you only use the Claude Code VS Code sidebar and never run the CLI, the offic
 3. The Claude Dashboard card now shows `Account limits source: Experimental OAuth usage`, clearly labeled `Experimental — undocumented Anthropic usage endpoint`.
 4. Run **AI Limit Ledger: Disable CLI-free Claude Usage** at any time to turn it back off; the official status-line integration is never affected.
 
-This is off by default, may be rate-limited, and may stop working if Anthropic changes the endpoint — it calls `api.anthropic.com/api/oauth/usage`, the same undocumented endpoint Claude Code's own `/usage` command uses, not a public API. Full details: `docs/EXPERIMENTAL_CLAUDE_USAGE.md` (bundled with the extension).
+This is off by default, may be rate-limited, and may stop working if Anthropic changes the endpoint — it reads only the OAuth access token in memory after consent and calls `api.anthropic.com/api/oauth/usage`, the same undocumented endpoint Claude Code's own `/usage` command uses, not a public API. Full details: `docs/EXPERIMENTAL_CLAUDE_USAGE.md` (bundled with the extension).
 
 ## Official provider links
 
@@ -139,7 +137,7 @@ Run **AI Limit Ledger: Connect GitHub Copilot Usage**. VS Code GitHub Authentica
 
 ## Grok Build usage
 
-Grok is experimental and disabled until you run **Enable Grok Usage**. Install the official CLI from the xAI/Grok Build guide, sign in with `grok login` in the launched VS Code terminal, then run **Recheck Grok Installation**. The community `pawelhuryn.grok-vscode-phuryn` extension is detected as community-only and is never treated as the official billing source. Use `/usage` inside Grok Build for the official account view.
+Grok usage is disabled until you run **Enable Grok Usage**. Install the official CLI from the xAI/Grok Build guide, sign in with `grok login` in the launched VS Code terminal, then run **Recheck Grok Installation**. When enabled, AI Limit Ledger uses the official Grok Build ACP transport; the `x.ai/billing` capability and the CLI-proxy billing fallback are experimental, and the fallback is opt-in. The community `pawelhuryn.grok-vscode-phuryn` extension is detected as community-only and is never treated as the official billing source. Use `/usage` inside Grok Build for the official account view; AI Limit Ledger does not run `/usage` automatically.
 
 After a successful Repair, the Claude card shows **Restart Claude CLI session**. Close existing Claude CLI sessions, start a completely new one, and complete one response. A valid snapshot removes the restart/waiting message automatically.
 
@@ -199,7 +197,7 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 ## Known limitations
 
 - Not published on the Visual Studio Code Marketplace yet; install from source only.
-- Claude's CLI-free OAuth usage check and Grok's CLI-proxy billing fallback are both **experimental**, off by default, and depend on undocumented provider endpoints that may change or stop working without notice.
+- Claude's CLI-free OAuth usage check, Grok's experimental `x.ai/billing` capability, and Grok's CLI-proxy billing fallback are **experimental**, off by default or opt-in, and depend on undocumented provider endpoints that may change or stop working without notice.
 - GitHub Copilot billing can lag behind individual Copilot requests; the Dashboard states this explicitly rather than estimating.
 - Some `npm audit` findings may appear in the future in dev-only tooling (`vitest`/`vite` chain); production dependencies are and will remain zero.
 - Windows is the primary development and test target for the Claude status-line wrapper; macOS/Linux chaining has an explicit best-effort fallback rather than full parity.
