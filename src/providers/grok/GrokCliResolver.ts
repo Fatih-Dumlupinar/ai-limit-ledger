@@ -20,18 +20,23 @@ const defaultRunner: GrokVersionRunner = async (file, args) => {
   return { stdout: String(result.stdout), stderr: String(result.stderr) };
 };
 
+function pathApiFor(platform: NodeJS.Platform): typeof path.posix | typeof path.win32 {
+  return platform === 'win32' ? path.win32 : path.posix;
+}
+
 export function validateExplicitGrokPath(
   executablePath: string,
   workspaceRoot?: string,
   platform: NodeJS.Platform = process.platform,
 ): { valid: boolean; reason?: GrokCliInfo['reason']; path?: string } {
-  if (!executablePath || !path.isAbsolute(executablePath)) {
+  const platformPath = pathApiFor(platform);
+  if (!executablePath || !platformPath.isAbsolute(executablePath)) {
     return { valid: false, reason: 'invalid-explicit-path' };
   }
-  const resolved = path.normalize(executablePath);
+  const resolved = platformPath.normalize(executablePath);
   if (workspaceRoot) {
-    const relative = path.relative(path.normalize(workspaceRoot), resolved);
-    if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    const relative = platformPath.relative(platformPath.normalize(workspaceRoot), resolved);
+    if (relative === '' || (!relative.startsWith('..') && !platformPath.isAbsolute(relative))) {
       return { valid: false, reason: 'workspace-path-rejected' };
     }
   }
@@ -112,10 +117,11 @@ export function standardGrokPaths(platform: NodeJS.Platform, env: NodeJS.Process
     const user = env.HOME ?? '';
     return [`${user}/.local/bin/grok`, '/usr/local/bin/grok', '/opt/homebrew/bin/grok'];
   }
+  const platformPath = pathApiFor(platform);
   const candidates = [
-    env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Programs', 'Grok', 'grok.exe') : '',
-    env.ProgramFiles ? path.join(env.ProgramFiles, 'Grok', 'grok.exe') : '',
-    env.USERPROFILE ? path.join(env.USERPROFILE, '.local', 'bin', 'grok.exe') : '',
+    env.LOCALAPPDATA ? platformPath.join(env.LOCALAPPDATA, 'Programs', 'Grok', 'grok.exe') : '',
+    env.ProgramFiles ? platformPath.join(env.ProgramFiles, 'Grok', 'grok.exe') : '',
+    env.USERPROFILE ? platformPath.join(env.USERPROFILE, '.local', 'bin', 'grok.exe') : '',
   ];
   return candidates.filter(Boolean);
 }

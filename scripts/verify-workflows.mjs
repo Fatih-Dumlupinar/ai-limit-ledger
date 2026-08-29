@@ -329,12 +329,22 @@ function findValues(value, key, output = []) {
 }
 
 export function checkActionReference(reference, comment = '') {
-  const match =
-    typeof reference === 'string'
-      ? reference.match(/^([^/\s]+\/[^/\s@]+(?:\/[^@\s]+)*)@([^\s]+)$/)
-      : null;
-  if (!match) return { ok: false, reason: 'action reference is not owner/repository@ref' };
-  const [, fullReference, ref] = match;
+  if (typeof reference !== 'string')
+    return { ok: false, reason: 'action reference is not owner/repository@ref' };
+  const atIndex = reference.lastIndexOf('@');
+  if (atIndex <= 0 || atIndex === reference.length - 1 || reference.indexOf('@') !== atIndex) {
+    return { ok: false, reason: 'action reference is not owner/repository@ref' };
+  }
+  const fullReference = reference.slice(0, atIndex);
+  const ref = reference.slice(atIndex + 1);
+  const referenceParts = fullReference.split('/');
+  if (
+    referenceParts.length < 2 ||
+    referenceParts.some((part) => part.length === 0 || /\s/.test(part)) ||
+    /\s/.test(ref)
+  ) {
+    return { ok: false, reason: 'action reference is not owner/repository@ref' };
+  }
   if (!/^[0-9a-f]{40}$/i.test(ref))
     return { ok: false, reason: 'action ref is not a full 40-character commit SHA' };
   const repository = fullReference.split('/').slice(0, 2).join('/');
