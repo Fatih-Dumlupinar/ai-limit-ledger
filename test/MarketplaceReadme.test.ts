@@ -6,6 +6,7 @@ import {
   REQUIRED_README_TR_SECTIONS,
   FORBIDDEN_MARKETING_CLAIMS,
   ABSOLUTE_PATH_PATTERNS,
+  findMissingScreenshotLinks,
   // @ts-expect-error -- plain ES module, no type declarations
 } from '../scripts/release-audit.mjs';
 
@@ -176,5 +177,86 @@ describe('Task 13: screenshots are not fabricated', () => {
 
   it('README.tr.md points to the screenshot runbook instead of an embedded image', () => {
     expect(readmeTr).toContain('docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md');
+  });
+});
+
+describe('Task 13.1: Screenshots section reads as optional, not half-finished', () => {
+  it('README.md frames the missing screenshots as optional, not pending/blocked', () => {
+    expect(readmeEn).not.toMatch(/screenshots?\s+(is|are)\s+pending/i);
+    expect(readmeEn).not.toMatch(/open blocker/i);
+    expect(readmeEn).toMatch(/optional/i);
+  });
+
+  it('README.tr.md frames the missing screenshots as optional, not pending/blocked', () => {
+    expect(readmeTr).not.toMatch(/pending/i);
+    expect(readmeTr).not.toMatch(/blocker/i);
+    expect(readmeTr).toMatch(/isteğe bağlı/i);
+  });
+
+  it('Known limitations no longer lists missing screenshots as a product limitation', () => {
+    // Absent screenshots are a listing detail, not a real product limitation (Claude session
+    // scope, Copilot org accounts, and Grok Free accounts remain genuine limitations below).
+    expect(readmeEn).not.toMatch(/Marketplace screenshots are not yet produced/i);
+    expect(readmeTr).not.toMatch(/Marketplace ekran görüntüleri henüz üretilmedi/i);
+  });
+
+  it('Roadmap no longer ties a future Marketplace publish to screenshots being produced', () => {
+    expect(readmeEn).not.toMatch(/screenshots? (is|are) produced/i);
+    expect(readmeTr).not.toMatch(/görüntüleri üretildikten sonra/i);
+  });
+
+  it('provider capability, privacy, and non-affiliation content is unchanged by this task', () => {
+    // Regression guard: Task 13.1 is documentation-only around screenshots — it must not touch
+    // the substantive provider/privacy/non-affiliation semantics established in Task 13.
+    for (const content of [readmeEn, readmeTr]) {
+      expect(content).toMatch(
+        /not affiliated with,?\s*endorsed by,?\s*or sponsored by|bağlantılı\s+değildir/i,
+      );
+    }
+    expect(readmeEn).toContain('Official, local App Server only');
+    expect(readmeEn).toContain('never summed across providers');
+  });
+});
+
+describe('Task 13.1: findMissingScreenshotLinks — pure link-integrity check', () => {
+  it('returns nothing when a referenced screenshot path exists', () => {
+    const content = '![Dashboard](assets/marketplace/dashboard-dark-en.png)';
+    const missing = findMissingScreenshotLinks(content, () => true);
+    expect(missing).toEqual([]);
+  });
+
+  it('returns the path when a referenced screenshot does not exist', () => {
+    const content = '![Dashboard](assets/marketplace/dashboard-dark-en.png)';
+    const missing = findMissingScreenshotLinks(content, () => false);
+    expect(missing).toEqual(['assets/marketplace/dashboard-dark-en.png']);
+  });
+
+  it('returns nothing for content with no assets/marketplace image references at all', () => {
+    const content = 'Just some ordinary text with no images.';
+    const missing = findMissingScreenshotLinks(content, () => false);
+    expect(missing).toEqual([]);
+  });
+
+  it('ignores non-screenshot image links (e.g. CI badges) entirely', () => {
+    const content = '[![CI](https://example.com/badge.svg)](https://example.com)';
+    const missing = findMissingScreenshotLinks(content, () => false);
+    expect(missing).toEqual([]);
+  });
+
+  it('finds multiple missing references independently', () => {
+    const content = ['![A](assets/marketplace/a.png)', '![B](assets/marketplace/b.png)'].join('\n');
+    const exists = (p: string) => p.endsWith('a.png');
+    const missing = findMissingScreenshotLinks(content, exists);
+    expect(missing).toEqual(['assets/marketplace/b.png']);
+  });
+
+  it('the real README.md has zero missing screenshot links today (it references none)', () => {
+    const missing = findMissingScreenshotLinks(readmeEn, () => false);
+    expect(missing).toEqual([]);
+  });
+
+  it('the real README.tr.md has zero missing screenshot links today (it references none)', () => {
+    const missing = findMissingScreenshotLinks(readmeTr, () => false);
+    expect(missing).toEqual([]);
   });
 });

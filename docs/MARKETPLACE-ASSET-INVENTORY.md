@@ -20,13 +20,15 @@ hash/dimension checks any time an asset file changes; do not hand-edit the SHA-2
 
 Exceeds the Marketplace minimum of 128×128 (256×256 for Retina) by a wide margin.
 
-## Marketplace screenshots — pending
+## Marketplace screenshots — optional, not currently added
 
-The following files are **not yet produced**. No placeholder or mock image was committed in their
-place; per Task 13's scope, they were not fabricated because this environment has no display or GUI
-automation tool available to capture a real render of the extension UI. See
-`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` for the exact manual steps a person with a desktop VS Code
-install should follow, using synthetic fixture data only.
+Screenshots are an **optional** Marketplace enhancement, not a requirement — the VS Code Marketplace
+has no manifest field for them and no publishing rule that requires them (verified against the
+current official publishing/manifest documentation). The listing is complete and publishable from
+`README.md` content alone. The five files below are **not currently present**; that is a normal,
+supported state, not an open item. No placeholder or mock image has been committed in their place,
+and none should ever be — if added, each must be a real render of the extension UI using synthetic
+fixture data only. See `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` for the optional capture procedure.
 
 | File                                          | Purpose                                  | Planned format          | Planned size | Included in VSIX (planned)        |
 | --------------------------------------------- | ---------------------------------------- | ----------------------- | ------------ | --------------------------------- |
@@ -36,14 +38,15 @@ install should follow, using synthetic fixture data only.
 | `assets/marketplace/safe-dashboard-en.png`    | Safe (webview-free) Dashboard, English   | PNG, ~1440×900–1600×900 | ≤1 MB        | No                                |
 | `assets/marketplace/statusbar-tooltip-en.png` | Status bar item + hover tooltip, English | PNG, ~1440×900–1600×900 | ≤1 MB        | No                                |
 
-Planned data source for all five: the real extension renderer (Rich/Safe Dashboard, status bar,
-tooltip), driven manually against synthetic/disposable-account data — never a hand-drawn mockup and
-never real personal account/quota data. Planned personal-data check: manual pixel review plus
-metadata stripping before commit, both described in the runbook.
+Planned data source for all five, if this optional enhancement is ever done: the real extension
+renderer (Rich/Safe Dashboard, status bar, tooltip), driven manually against synthetic/disposable-
+account data — never a hand-drawn mockup and never real personal account/quota data. Planned
+personal-data check: manual pixel review plus metadata stripping before commit, both described in
+the runbook.
 
-This inventory's screenshot rows must be filled in with real format/dimensions/size/SHA-256/alt
-text once the runbook is completed, and `docs/MARKETPLACE-LISTING.md`'s screenshot list updated to
-match, before a real Marketplace publish is attempted (Task 14).
+If any of these files are added later, fill in this inventory's row with the real
+format/dimensions/size/SHA-256/alt text, and update `docs/MARKETPLACE-LISTING.md`'s Screenshots
+section to match. Adding them is never a precondition for a Marketplace publish.
 
 ## VSIX packaging policy for Marketplace assets
 

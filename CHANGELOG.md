@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- **Task 13.1 — Marketplace screenshots are optional.** Documentation-only change; no runtime,
+  version, or publish-state change. Confirmed against the current official VS Code
+  publishing/extension-manifest documentation that screenshots have no manifest field and are not
+  a Marketplace publishing requirement. Removed "pending"/"required"/"open blocker before Task 14"
+  language for the five planned screenshot files from `README.md`, `README.tr.md`,
+  `docs/MARKETPLACE-LISTING.md`, `docs/MARKETPLACE-ASSET-INVENTORY.md`,
+  `docs/MARKETPLACE-PREFLIGHT.md`, and `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`; the listing is
+  publishable from README content alone with no screenshots. `scripts/release-audit.mjs`'s
+  `marketplace-screenshots` check now reports `pass` (not `warn`) when no screenshots are present,
+  and a new `marketplace-readme-screenshot-links` check guards against a README referencing a
+  screenshot file that does not exist. Marketplace screenshots are optional and may be added in a
+  later documentation-only update, using only the real extension UI and synthetic fixture data.
 - **Task 13 — VS Code Marketplace listing and package preparation.** No provider/runtime behavior
   change. `package.json`'s `publisher` changed from `local` to the real Marketplace publisher ID
   `fatihdumlupinar-dev` (permanent extension ID: `fatihdumlupinar-dev.ai-limit-ledger`), and

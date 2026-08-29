@@ -59,8 +59,8 @@ extensions, not an upgrade path:
    things and neither substitutes for the other.
 7. Build and test on a supported Node LTS (Node 24 preferred, Node 22 minimum — see
    `.nvmrc`/`package.json` `engines.node`); Node 20 is end-of-life and unsupported for development.
-8. Complete every item in `docs/MARKETPLACE-PREFLIGHT.md`, including producing the screenshots
-   described in `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`.
+8. Complete every item in `docs/MARKETPLACE-PREFLIGHT.md`. Screenshots are optional (see below) and
+   are not one of the required items.
 
 Before a future publish, first complete the ruleset checks documented in `docs/BRANCH-RULESET.md`
 and confirm that the Task 12 CI, CodeQL, Secret Scan, and Dependency Review checks are green. Do
@@ -71,7 +71,8 @@ official GitHub Billing REST API plus VS Code auth or an explicit Plan-read PAT,
 tries the official `x.ai/billing` ACP method first while its CLI-proxy fallback is experimental and
 opt-in. Do not imply xAI, GitHub, Microsoft, OpenAI, or Anthropic endorsement.
 
-Before publishing, add Marketplace screenshots for normal, compact, warning, critical, unavailable,
-tooltip, and details-panel states — see `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` for the safe,
-synthetic-data capture procedure and `docs/MARKETPLACE-ASSET-INVENTORY.md` for the current status
-of each file.
+Marketplace screenshots are **optional** — the Marketplace has no manifest field for them and no
+publishing rule that requires them, so a missing screenshot never blocks or delays a publish. If
+real product screenshots are added later as a separate, optional documentation-only enhancement,
+see `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` for the safe, synthetic-data capture procedure and
+`docs/MARKETPLACE-ASSET-INVENTORY.md` for the current status of each file.

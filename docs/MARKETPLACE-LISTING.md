@@ -36,7 +36,7 @@ package's README as its main page). Section order, as restructured for Task 13:
 1. Title, Turkish-README link, CI/CodeQL badges
 2. One-sentence value proposition
 3. Preview-status callout
-4. Screenshot placeholders — pending, see `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`
+4. Screenshots section — optional, not currently included (see "Screenshots" below)
 5. "Why AI Limit Ledger?"
 6. Supported provider matrix
 7. Core features
@@ -104,15 +104,16 @@ provider/product names for interoperability and discovery.
 
 ## Screenshots
 
-See `docs/MARKETPLACE-ASSET-INVENTORY.md` for the authoritative per-file table. Summary:
+**Optional.** The VS Code Marketplace has no manifest field for screenshots and no publishing
+requirement that they exist — the listing publishes from `README.md` content (features, provider
+matrix, privacy/security, settings) regardless of whether images are present. This listing
+currently includes no screenshots; that is a complete, publishable state, not a gap.
 
-| File                                          | Alt text                                                                                                                     | Status                |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| `assets/marketplace/dashboard-dark-en.png`    | "AI Limit Ledger Rich Dashboard, dark theme, showing Codex, Claude Code, GitHub Copilot, and Grok provider cards in English" | Pending — see runbook |
-| `assets/marketplace/dashboard-light-en.png`   | "AI Limit Ledger Rich Dashboard, light theme, English"                                                                       | Pending — see runbook |
-| `assets/marketplace/dashboard-tr.png`         | "AI Limit Ledger Rich Dashboard in Turkish"                                                                                  | Pending — see runbook |
-| `assets/marketplace/safe-dashboard-en.png`    | "AI Limit Ledger Safe Dashboard read-only text view, English"                                                                | Pending — see runbook |
-| `assets/marketplace/statusbar-tooltip-en.png` | "AI Limit Ledger status bar item with hover tooltip showing per-provider usage, English"                                     | Pending — see runbook |
+Real product screenshots, captured from the actual extension UI with synthetic fixture data only,
+are a possible **future, optional documentation-only enhancement** — see
+`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md` for the safe capture procedure and
+`docs/MARKETPLACE-ASSET-INVENTORY.md` for the planned (not required) file list if that enhancement
+is ever done.
 
 ## Provider capability summary (for listing copy)
 

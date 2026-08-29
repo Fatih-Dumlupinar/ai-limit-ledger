@@ -16,10 +16,12 @@ bölümü şu anki, dürüst boşluk listesidir.
 
 ## Ekran görüntüleri
 
-Marketplace ekran görüntüleri hazırlanıyor ve henüz bu README'ye gömülmedi — nasıl üretileceği için
-bkz. [`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md) (gerçek
-eklenti renderer'ı, yalnızca sentetik fixture verisi, gerçek hesap/kullanım verisi yok). Bu arada
-hiçbir mockup veya placeholder görsel kullanılmaz.
+Bu README şu anda ekran görüntüsü içermiyor — bu bir eksiklik değil, isteğe bağlı bir durumdur.
+Aşağıdaki bölümler (özellikler, sağlayıcı matrisi, gizlilik, ayarlar, komutlar) eklentiyi eksiksiz
+şekilde açıklar. Gerçek ürün ekran görüntüleri, yalnızca sentetik fixture verisiyle gerçek eklenti
+arayüzünden alınarak, gelecekte isteğe bağlı bir belge güncellemesiyle eklenebilir — bu isteğe bağlı
+süreç için bkz. [`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md).
+Hiçbir zaman mockup, yapay zekâ ile üretilmiş görsel veya placeholder kullanılmaz.
 
 ## Neden AI Limit Ledger?
 
@@ -314,16 +316,15 @@ Bir güvenlik açığı için herkese açık bir issue açmayın. Özel olarak n
 - Grok Free hesapları, billing capability'sinden hiç sayısal bir kullanım yüzdesi almayabilir.
 - Gelecekte yalnızca geliştirme amaçlı araçlarda (`vitest`/`vite` zinciri) bazı `npm audit` bulguları görünebilir; üretim bağımlılıkları sıfırdır ve sıfır kalacaktır.
 - Claude status-line wrapper'ı için Windows birincil geliştirme ve test hedefidir; macOS/Linux zincirleme tam eşlik yerine açık bir en iyi çaba yedeğine sahiptir.
-- Marketplace ekran görüntüleri henüz üretilmedi — bkz. [Ekran görüntüleri](#ekran-görüntüleri).
 
 ## Yol haritası
 
 Aşağıdaki öğeler **planlanmıştır, taahhüt edilmemiştir** ve değişebilir:
 
 - Task 12 PR'ı incelendikten sonra ek branch koruması/ruleset yapılandırması.
-- Task 13 preflight kontrol listesi (`docs/MARKETPLACE-PREFLIGHT.md`) tamamlandıktan ve ekran
-  görüntüleri üretildikten sonra, GitHub Release tabanlı bir kurulum yolu ile bir Visual Studio
-  Code Marketplace yayını.
+- `docs/MARKETPLACE-PREFLIGHT.md` kontrol listesi tamamlandıktan sonra, GitHub Release tabanlı bir
+  kurulum yolu ile bir Visual Studio Code Marketplace yayını. Ekran görüntüleri isteğe bağlı, ayrı
+  bir iyileştirmedir (bkz. [Ekran görüntüleri](#ekran-görüntüleri)) ve bunun ön koşulu değildir.
 - Gelecekte ek sağlayıcı desteği değerlendirilebilir; şu anda Codex, Claude Code, GitHub Copilot ve Grok'un ötesinde hiçbir şey planlanmamış veya uygulanmamıştır.
 
 ## Bağlantısızlık bildirimi
