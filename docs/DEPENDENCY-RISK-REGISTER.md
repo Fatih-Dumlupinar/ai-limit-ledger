@@ -64,6 +64,22 @@ MIT/Apache-2.0; none are shipped in the VSIX (`node_modules/**` is excluded, and
 `npm run package` uses `--no-dependencies`). The `vitest` 2→4 upgrade did not change this —
 `vite` (also MIT) is still transitive-only and dev-only.
 
+## Task 12.1: Node type compatibility and major-update policy
+
+- Dependabot PR **#5** changed `@types/node` from `20.19.43` to `26.3.0`. It did not produce a
+  runtime/provider error, but it created unnecessary extension-host compatibility risk. The change
+  is restored to the `^20.17.0` manifest range and the compatible `20.19.43` lockfile resolution.
+- `@types/node` is a development type contract; it does not automatically track the Node version
+  installed on the development machine. The development engine remains Node `>=22.12.0`, with
+  Node 24 preferred, while `@types/vscode` and `engines.vscode` continue to describe the VS Code
+  extension host.
+- Dependabot now ignores npm `version-update:semver-major` updates for normal version-update PRs.
+  Minor and patch updates remain grouped and open. Per Dependabot's `update-types` contract, this
+  ignore rule does not block security updates. Major migrations are manual, planned tasks reviewed
+  for changelog impact, peer dependencies, and CI/toolchain compatibility.
+- The PR **#2** `@typescript-eslint` updates remain in place; TypeScript 5, ESLint 9, and Vitest 4
+  remain the supported toolchain majors.
+
 ## Re-evaluation trigger
 
 Revisit this table before every release, and immediately if `npm audit` reports a new finding

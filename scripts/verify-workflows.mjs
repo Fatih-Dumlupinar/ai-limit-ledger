@@ -613,6 +613,126 @@ export function inspectWorkflow(file, source) {
   return { document, errors };
 }
 
+function majorVersion(value) {
+  const match = String(value ?? '').match(/(?:^|[^\d])(\d+)(?=\.)/);
+  return match ? Number(match[1]) : null;
+}
+
+function versionParts(value) {
+  const match = String(value ?? '').match(/^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/);
+  return match ? match.slice(1, 4).map(Number) : null;
+}
+
+function satisfiesCaretRange(range, version) {
+  const rangeParts = String(range ?? '').match(/^\^(\d+)\.(\d+)\.(\d+)$/);
+  const resolvedParts = versionParts(version);
+  if (!rangeParts || !resolvedParts) return false;
+  const minimum = rangeParts.slice(1, 4).map(Number);
+  if (resolvedParts[0] !== minimum[0]) return false;
+  if (resolvedParts[1] < minimum[1]) return true;
+  if (resolvedParts[1] > minimum[1]) return true;
+  return resolvedParts[2] >= minimum[2];
+}
+
+function compareStringMaps(label, expected, actual, errors) {
+  const expectedMap = expected && typeof expected === 'object' ? expected : {};
+  const actualMap = actual && typeof actual === 'object' ? actual : {};
+  const names = new Set([...Object.keys(expectedMap), ...Object.keys(actualMap)]);
+  for (const name of names) {
+    if (expectedMap[name] !== actualMap[name])
+      issue(errors, 'package-lock.json', `${label} entry ${name} does not match package.json`);
+  }
+}
+
+function validatePackageCompatibility(root, errors) {
+  const packagePath = path.join(root, 'package.json');
+  const lockPath = path.join(root, 'package-lock.json');
+  if (!existsSync(packagePath) || !existsSync(lockPath)) {
+    issue(errors, 'package-lock.json', 'package.json and package-lock.json are both required');
+    return;
+  }
+
+  let packageJson;
+  let packageLock;
+  try {
+    packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+    packageLock = JSON.parse(readFileSync(lockPath, 'utf8'));
+  } catch {
+    issue(errors, 'package-lock.json', 'package.json and package-lock.json must be valid JSON');
+    return;
+  }
+
+  const lockRoot = packageLock.packages?.[''];
+  if (!lockRoot || typeof lockRoot !== 'object') {
+    issue(errors, 'package-lock.json', 'packages[""] root entry is required');
+    return;
+  }
+  if (packageLock.version !== packageJson.version || lockRoot.version !== packageJson.version)
+    issue(errors, 'package-lock.json', 'manifest and lockfile project versions must match');
+  compareStringMaps('dependencies', packageJson.dependencies, lockRoot.dependencies, errors);
+  compareStringMaps(
+    'devDependencies',
+    packageJson.devDependencies,
+    lockRoot.devDependencies,
+    errors,
+  );
+  compareStringMaps('engines', packageJson.engines, lockRoot.engines, errors);
+
+  const devDependencies = packageJson.devDependencies ?? {};
+  const lockedPackages = packageLock.packages ?? {};
+  const nodeRange = devDependencies['@types/node'];
+  const nodeEntry = lockedPackages['node_modules/@types/node'];
+  if (majorVersion(nodeRange) !== 20 || !/^\^20\./.test(String(nodeRange ?? '')))
+    issue(errors, 'package.json', '@types/node must remain on the 20.x compatibility range');
+  if (majorVersion(nodeEntry?.version) !== 20)
+    issue(errors, 'package-lock.json', '@types/node must resolve to a 20.x version');
+  if (!satisfiesCaretRange(nodeRange, nodeEntry?.version))
+    issue(
+      errors,
+      'package-lock.json',
+      '@types/node lockfile version is outside its manifest range',
+    );
+
+  const nodeEngine = packageJson.engines?.node;
+  if (majorVersion(nodeEngine) === null || majorVersion(nodeEngine) < 22)
+    issue(
+      errors,
+      'package.json',
+      'engines.node must describe the supported development runtime (22+)',
+    );
+  if (majorVersion(packageJson.engines?.vscode) !== 1)
+    issue(errors, 'package.json', 'engines.vscode must remain the VS Code extension-host contract');
+  if (majorVersion(devDependencies['@types/vscode']) !== 1)
+    issue(
+      errors,
+      'package.json',
+      '@types/vscode must remain the VS Code extension-host type contract',
+    );
+  if (majorVersion(nodeEngine) === majorVersion(nodeRange))
+    issue(
+      errors,
+      'package.json',
+      'Node development engine and @types/node compatibility range must stay distinct',
+    );
+
+  for (const [name, expectedMajor] of [
+    ['typescript', 5],
+    ['eslint', 9],
+    ['vitest', 4],
+    ['@typescript-eslint/eslint-plugin', 8],
+    ['@typescript-eslint/parser', 8],
+  ]) {
+    if (majorVersion(devDependencies[name]) !== expectedMajor)
+      issue(errors, 'package.json', `${name} must remain on the supported ${expectedMajor}.x line`);
+    if (majorVersion(lockedPackages[`node_modules/${name}`]?.version) !== expectedMajor)
+      issue(
+        errors,
+        'package-lock.json',
+        `${name} must resolve on the supported ${expectedMajor}.x line`,
+      );
+  }
+}
+
 function validateDependabot(source, errors) {
   let document;
   try {
@@ -652,6 +772,23 @@ function validateDependabot(source, errors) {
       '.github/dependabot.yml',
       'npm development minor/patch updates should be grouped',
     );
+  const npmMajorIgnore = Array.isArray(npm?.ignore)
+    ? npm.ignore.find(
+        (entry) =>
+          entry?.['dependency-name'] === '*' &&
+          Array.isArray(entry['update-types']) &&
+          entry['update-types'].length === 1 &&
+          entry['update-types'][0] === 'version-update:semver-major',
+      )
+    : undefined;
+  if (!npmMajorIgnore)
+    issue(
+      errors,
+      '.github/dependabot.yml',
+      'npm normal version updates must ignore semver-major releases',
+    );
+  if (/['\"]?security-updates['\"]?\s*:\s*false/i.test(JSON.stringify(npm ?? {})))
+    issue(errors, '.github/dependabot.yml', 'Dependabot security updates must remain enabled');
   const actions = updates.find((item) => item?.['package-ecosystem'] === 'github-actions');
   if (
     !JSON.stringify(actions?.groups ?? {}).includes('minor') ||
@@ -718,6 +855,7 @@ export function verifyRepository(root = ROOT) {
     if (packageJson.scripts?.['verify:workflows'] !== 'node scripts/verify-workflows.mjs')
       issue(errors, 'package.json', 'verify:workflows script is missing');
   }
+  validatePackageCompatibility(root, errors);
   for (const file of ['.nvmrc', '.node-version']) {
     const fullPath = path.join(root, file);
     if (!existsSync(fullPath) || readFileSync(fullPath, 'utf8').trim() !== '24')
