@@ -20,6 +20,10 @@ const defaultRunner: CopilotCommandRunner = async (file, args) => {
 };
 const defaultFs: CopilotFileSystem = { stat: async (file) => stat(file) };
 
+function pathApiFor(platform: NodeJS.Platform): typeof path.posix | typeof path.win32 {
+  return platform === 'win32' ? path.win32 : path.posix;
+}
+
 async function isFile(fsApi: CopilotFileSystem, file: string): Promise<boolean> {
   try {
     return (await fsApi.stat(file)).isFile();
@@ -43,8 +47,12 @@ export function standardCopilotPaths(platform: NodeJS.Platform, env: NodeJS.Proc
     const home = env.HOME ?? '';
     return [`${home}/.local/bin/copilot`, '/usr/local/bin/copilot', '/opt/homebrew/bin/copilot'];
   }
+  const platformPath = pathApiFor(platform);
   return env.APPDATA
-    ? [path.join(env.APPDATA, 'npm', 'copilot.cmd'), path.join(env.APPDATA, 'npm', 'copilot.exe')]
+    ? [
+        platformPath.join(env.APPDATA, 'npm', 'copilot.cmd'),
+        platformPath.join(env.APPDATA, 'npm', 'copilot.exe'),
+      ]
     : [];
 }
 
@@ -80,9 +88,11 @@ export async function detectCopilotCli(
   const runner = options.runVersion ?? defaultRunner;
 
   if (options.explicitPath) {
-    const resolved = path.normalize(options.explicitPath);
+    const platformPath = pathApiFor(platform);
+    const resolved = platformPath.normalize(options.explicitPath);
     const validExplicitPath =
-      path.isAbsolute(resolved) && (platform !== 'win32' || /\.(?:exe|cmd|bat)$/i.test(resolved));
+      platformPath.isAbsolute(resolved) &&
+      (platform !== 'win32' || /\.(?:exe|cmd|bat)$/i.test(resolved));
     if (validExplicitPath && (await isFile(fsApi, resolved))) {
       try {
         return await versionFor(resolved, runner);

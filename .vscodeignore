@@ -11,6 +11,8 @@ eslint.config.mjs
 debug.log
 *.vsix
 .tmp/**
+.github/**
+.gitleaks.toml
 .gitignore
 .prettierignore
 .nvmrc

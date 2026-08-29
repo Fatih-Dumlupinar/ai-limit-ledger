@@ -1,112 +1,114 @@
-# CI security design (for Task 12 — not implemented in this release)
+# CI and repository security design (Task 12)
 
-This document is a **design only**. No `.github/` directory or workflow file is created by
-Task 10; this is the plan Task 12 should implement once the repository is public (Task 11).
+Task 12 implements four GitHub Actions workflows and a dependency-free local policy verifier.
+They are intentionally read-first checks: none publishes a release, uploads to the Marketplace,
+opens a pull request, or writes repository content.
 
-## Goals
+## Workflow responsibilities
 
-- Every pull request and push to `main` compiles, lints, format-checks, runs the full test
-  suite, and runs `npm run audit:release` before it can merge.
-- A compromised or malicious PR from a fork cannot exfiltrate secrets, modify protected
-  branches, or publish a release.
-- The workflow itself has the smallest possible permission footprint and the smallest possible
-  set of third-party actions, each pinned to a full commit SHA.
+| Workflow            | Trigger                           | Responsibility                                                                                                 |
+| ------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `CI`                | PR/push to `main`, manual         | Node 24 quality matrix on Ubuntu and Windows; Ubuntu npm audits; package and audit a VSIX after quality passes |
+| `CodeQL`            | PR/push to `main`, weekly, manual | JavaScript/TypeScript analysis with CodeQL `build-mode: none`                                                  |
+| `Secret Scan`       | PR/push to `main`, manual         | Full Git-history scan with the official Gitleaks CLI and redacted SARIF output                                 |
+| `Dependency Review` | PR to `main` only                 | Reject changed dependencies at `moderate` severity or higher                                                   |
 
-## Proposed workflow shape
+The quality jobs use `node-version-file: .nvmrc`, npm caching keyed by `package-lock.json`, and
+only `npm ci`. They run `compile`, `lint`, `format:check`, `audit:release`, and `test` on both
+operating systems. Ubuntu additionally runs `npm audit --audit-level=moderate` and
+`npm audit --omit=dev --audit-level=moderate`. The package job has `needs: quality`, starts from a
+fresh checkout and `npm ci`, runs `npm run package`, audits the generated VSIX, and uploads it as a
+non-release artifact with seven-day retention.
 
-A single `ci.yml` workflow, triggered on `pull_request` (from forks and same-repo branches) and
-`push` to `main`:
+## Action supply-chain policy
 
-```text
-permissions:
-  contents: read        # default; nothing in CI needs to write to the repo
+Every external Action is from its official repository, uses a full 40-character release commit
+SHA, and has a same-line release-version comment. The SHAs below were resolved from the official
+release tags (annotated tags were dereferenced):
 
-jobs:
-  verify:
-    runs-on: windows-latest   # Claude wrapper tests (ClaudeWrapperRunner) spawn real
-                               # powershell.exe and are Windows-specific; a second
-                               # ubuntu-latest job can run the OS-agnostic subset if the
-                               # POSIX wrapper path is ever exercised in CI.
-    steps:
-      - uses: actions/checkout@<pinned-sha>       # no submodules, no credentials persisted
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@<pinned-sha>
-        with:
-          node-version-file: '.nvmrc'               # Node 24 LTS — matches engines.node (>=22.12.0 minimum)
-      - run: npm ci
-      - run: npm run compile
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run audit:release
-      - run: npm test
-      - run: npm run package
-      - run: npm run audit:release -- ai-limit-ledger-*.vsix
-```
+| Action                             | Release tag | Pinned commit                              | Official release                                                                   |
+| ---------------------------------- | ----------- | ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `actions/checkout`                 | `v7.0.1`    | `3d3c42e5aac5ba805825da76410c181273ba90b1` | [release](https://github.com/actions/checkout/releases/tag/v7.0.1)                 |
+| `actions/setup-node`               | `v7.0.0`    | `820762786026740c76f36085b0efc47a31fe5020` | [release](https://github.com/actions/setup-node/releases/tag/v7.0.0)               |
+| `actions/upload-artifact`          | `v7.0.1`    | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | [release](https://github.com/actions/upload-artifact/releases/tag/v7.0.1)          |
+| `github/codeql-action`             | `v4.37.9`   | `cdf488f595d80d6e07e03d4674febd5ab45fa938` | [release](https://github.com/github/codeql-action/releases/tag/v4.37.9)            |
+| `actions/dependency-review-action` | `v5.0.0`    | `a1d282b36b6f3519aa1f3fc636f609c47dddb294` | [release](https://github.com/actions/dependency-review-action/releases/tag/v5.0.0) |
 
-### Why `permissions: contents: read`
+Dependabot is configured to propose future SHA updates for GitHub Actions. A tag comment keeps
+the human-reviewable release identity next to the immutable reference; it does not make the
+reference mutable.
 
-The workflow never needs to write to the repository, open PRs, or publish releases — those are
-separate, explicitly-gated jobs (see below). Read-only `GITHUB_TOKEN` scope means a compromised
-dependency (e.g. through a malicious transitive `devDependency` update) cannot use the ambient
-token to push code, create releases, or modify repository settings.
+## Permissions and fork model
 
-### Why every action is pinned to a commit SHA, not a floating tag
+`CI`, `Secret Scan`, and `Dependency Review` declare only `contents: read`. CodeQL declares
+`contents: read` and `security-events: write`, which is required to upload CodeQL results. No
+other write permission is granted. All workflows use `pull_request` for pull requests, so fork
+code is not executed with a target-branch trust boundary or repository secrets. No workflow uses
+`pull_request_target`, because combining that trigger with checkout of PR-controlled code could
+expose a write-capable token or a secret to untrusted code.
 
-A floating tag (`actions/checkout@v4`) can be repointed by the action's maintainer (or an
-attacker who compromises that maintainer's account) to a different commit without any change
-visible in this repository's history. Pinning `uses: owner/repo@<40-char-sha>` makes the exact
-code that runs auditable and reviewable, and Dependabot (see below) can still propose SHA
-bumps.
+No workflow interpolates `github.event`, branch, actor, ref, or workflow-dispatch input directly
+inside a shell command. The only context expressions are used in workflow metadata, conditions,
+artifact paths, and concurrency keys. Every job has a timeout and every workflow has
+branch/ref-based concurrency; an updated PR cancels its older run where appropriate.
 
-### Why forks never see secrets
+## CodeQL
 
-`pull_request` (not `pull_request_target`) is used for the verify job, so workflows triggered
-by a fork's PR run with a read-only token and **no repository secrets** are exposed to them by
-default. Nothing in this project's CI needs a secret to compile/lint/test/package/audit, so no
-secret is declared for this job at all.
+The analysis language is `javascript-typescript`. JavaScript/TypeScript uses CodeQL's
+`build-mode: none`; no unnecessary custom build, provider login, credential, or model call is
+added. The scheduled run is weekly and is explicitly guarded to the default `main` branch. If
+CodeQL is unavailable because of a repository plan or setting, the workflow remains present and
+the failed check must be reported and remediated in GitHub settings; it is not silently removed.
 
-## Branch protection (Task 12 configuration, not a file in this repo)
+## Independent secret scanning
 
-- Require the `verify` status check to pass before merging to `main`.
-- Require branches to be up to date before merging.
-- Disallow force-push and branch deletion on `main`.
-- Require at least one review before merging (once there are collaborators beyond the sole
-  maintainer; a solo-maintainer repo may instead require the check alone).
+GitHub-native Secret Scanning and Push Protection were recorded as unavailable in the original
+Task 12 starting brief. The current GitHub API metadata check reports both features as enabled,
+but Task 12 neither changed nor relies exclusively on those settings. The independent scan stays
+in the repository because native availability can vary by repository plan and account.
 
-## A separate, manually-triggered publish workflow (out of scope for Task 12, noted for later)
+`Secret Scan` checks out `fetch-depth: 0`, downloads the official
+[`gitleaks v8.30.1` release](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1) Linux x64
+asset, downloads the release's official `gitleaks_8.30.1_checksums.txt`, confirms the archive line
+matches the recorded SHA-256
+`551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb`, and runs `sha256sum --check`
+before extraction. A failed download or checksum stops the job. Gitleaks runs `git` against the
+complete checkout with `--redact`, emits SARIF, and exits non-zero on findings. The report upload
+is explicitly bounded and is configured to ignore a missing report after an earlier failure; it
+does not turn a scan failure into a success and does not contain raw secret values by design.
 
-Publishing to the Marketplace should **not** be automatic on every push to `main`. A future,
-separate `publish.yml` triggered only on a manually-created Git tag (e.g. `v0.7.0`) would:
+The repository's existing `npm run audit:release` remains a complementary offline source and VSIX
+audit. It is not GitHub-native secret scanning and it does not replace Gitleaks history scanning.
+Fixture values in tests use generic markers or runtime-built pieces. One historical synthetic AWS
+fixture from the starting history cannot be removed without rewriting shared history, so the
+repository-local `.gitleaks.toml` allowlist matches only that exact test path and exact synthetic
+pattern. It is tested by the local full-history scan and is not a broad source/test/docs exclusion.
+No workflow excludes `src/**`, scripts, configuration, or documentation directories.
 
-- run the exact same `verify` steps first,
-- use a dedicated `secrets.VSCE_PAT` with only **Marketplace: Manage** scope, stored as a
-  repository (not organization-wide) secret,
-- run `vsce publish` only after `npm run audit:release -- <vsix>` reports zero `fail` findings,
-  and
-- never run on a `pull_request` trigger, so a fork can never cause a publish.
+## Dependency Review versus npm audit
 
-This publish workflow is explicitly **not** part of Task 12's scope per the Task 10 brief and is
-recorded here only so the design is not lost before Task 12 begins.
+Dependency Review evaluates dependency changes introduced by a pull request and fails at
+`moderate` or higher severity. It does not use a speculative license denylist and does not omit
+development dependencies. `npm audit` evaluates the resolved lockfile tree against the npm
+registry and is run for all dependencies and production-only dependencies in CI. The offline
+`audit:release` script checks local manifest/lockfile consistency, credential-shaped patterns,
+and packaged VSIX contents. These three checks answer different questions.
 
-## Dependency update automation (Task 12 configuration)
+Dependency graph availability was confirmed through the repository API. If it is disabled later,
+the Dependency Review check must be enabled in GitHub settings; the workflow must not be deleted
+or weakened.
 
-A `dependabot.yml` limited to the `npm` ecosystem, weekly cadence, grouped minor/patch updates,
-targeting `package.json`'s 9 direct devDependencies. Given the project has zero production
-dependencies, Dependabot's blast radius is inherently limited to build/test tooling; any PR it
-opens still has to pass the same `verify` workflow, including `npm run audit:release`, before
-merge.
+## Dependabot
 
-## Current GitHub availability
+Dependabot checks npm and GitHub Actions weekly, targets `main`, and permits at most five open PRs
+per ecosystem. Development npm minor/patch updates and GitHub Actions minor/patch updates are
+grouped. Major updates are not in those groups and therefore remain separate. No automatic merge
+configuration or custom label that is absent from the repository is used.
 
-At Task 11 completion, GitHub-native secret scanning and push protection were not offered in
-the repository settings available to the owner. Task 12 must therefore add an independent CI
-secret scan and evaluate a local/pre-commit safeguard without claiming that GitHub-native push
-protection is enabled. Native features should be re-evaluated if they become available later.
+## Scope boundary
 
-## Secret scanning (Task 12 configuration)
-
-Task 12 must select and add an independent CI secret scan, then evaluate a local/pre-commit
-safeguard. The tool choice is intentionally not fixed by this design. The existing
-`scripts/release-audit.mjs` local credential-pattern scan remains a complementary offline check
-for contributors; it does not represent GitHub-native secret scanning or push protection.
+The CI package artifact is validation-only and expires after seven days. It is not a GitHub
+Release, Marketplace publication, or release credential flow. A future publish workflow would be
+a separate manually reviewed change with a narrowly scoped credential and a tag-only trigger.
+Task 12 also does not create the ruleset; the exact required checks and GitHub UI steps are in
+[BRANCH-RULESET.md](BRANCH-RULESET.md).

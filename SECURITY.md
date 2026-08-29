@@ -1,5 +1,33 @@
 # AI Limit Ledger Security
 
+## Repository CI security (Task 12)
+
+The repository has four checks: `CI`, `CodeQL`, `Secret Scan`, and `Dependency Review`. CI runs
+the locked install and quality commands on Ubuntu and Windows, then packages and audits a VSIX.
+CodeQL analyzes JavaScript/TypeScript on pull requests, pushes to `main`, and a weekly default-
+branch schedule. Dependency Review fails moderate-or-higher vulnerabilities without excluding
+development dependencies. Secret Scan checks the complete Git history with the official Gitleaks
+CLI, verifies its release archive against the official SHA-256 checksum, runs with `--redact`, and
+fails on findings. Its report artifact is retention-limited and contains no raw secret by design.
+
+All external Actions are pinned to full commit SHAs and use least-privilege permissions. Fork PRs
+use `pull_request`, never `pull_request_target`; no repository secret or provider session is
+available to these checks. The current repository API metadata reports GitHub-native secret
+scanning and push protection enabled, but the independent scan remains part of this repository's
+policy and Task 12 did not alter GitHub settings. Native availability may differ by account or
+repository plan, so it must not be treated as the only control.
+
+`npm audit` checks the resolved dependency tree against the npm registry and needs network access.
+`npm run audit:release` is a separate dependency-free offline manifest, credential-pattern, and
+VSIX-content audit. Dependency Review evaluates dependency changes in a pull request; neither
+tool replaces the other.
+
+The workflow verifier (`npm run verify:workflows`) rejects floating or short Action references,
+unsafe permissions, untrusted shell interpolation, broad secret-scan exclusions, unverified
+Gitleaks downloads, publish steps, and VSIX packaging regressions. See
+[docs/CI-SECURITY-DESIGN.md](docs/CI-SECURITY-DESIGN.md) and
+[docs/BRANCH-RULESET.md](docs/BRANCH-RULESET.md) for the repository policy.
+
 ## Supported Node LTS and dependency remediation (0.6.2)
 
 No user-facing feature change. Development-only: the project now targets a supported Node LTS

@@ -718,7 +718,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "package": "npm run compile && vsce package --no-dependencies",
-    "audit:release": "node scripts/release-audit.mjs"
+    "audit:release": "node scripts/release-audit.mjs",
+    "verify:workflows": "node scripts/verify-workflows.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Added secure GitHub Actions CI for Ubuntu/Windows quality checks, CodeQL, independent full-history
+  Gitleaks scanning with checksum verification, moderate-threshold Dependency Review, and weekly
+  Dependabot npm/Actions updates.
+- Pinned every external Action to a full release commit SHA and added the dependency-free
+  `verify:workflows` policy verifier plus regression tests. Release and Marketplace publishing are
+  intentionally outside Task 12.
 - Clarified the Claude credential boundary between the official status-line integration and the separate, explicit-consent experimental OAuth transport.
 - Corrected Grok ACP transport and `x.ai/billing` method provenance, including the experimental, opt-in CLI-proxy fallback.
 - Scoped the Codex token statement to the Codex provider and removed the repeated affiliation warning.
