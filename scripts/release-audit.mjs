@@ -136,10 +136,12 @@ async function checkAbsoluteUserPaths() {
     .concat(await walk('docs'))
     .concat([
       'README.md',
+      'README.tr.md',
       'CHANGELOG.md',
       'SECURITY.md',
       'PRIVACY.md',
       'SUPPORT.md',
+      'PUBLISHING.md',
       'package.json',
     ])
     .filter((f) => existsSync(path.join(ROOT, f)) && isLikelyTextFile(f));
@@ -420,6 +422,15 @@ export const VSIX_DENYLIST_PATTERNS = [
   /^extension\/scripts\//,
   /^extension\/\.nvmrc$/,
   /^extension\/\.node-version$/,
+  // Test fixtures and CI/workflow definitions — dev-time only, never needed by the installed
+  // extension (Task 13).
+  /^extension\/test\//,
+  /^extension\/\.github\//,
+  // Marketplace listing screenshots and internal Marketplace-prep docs live in the repository for
+  // the Marketplace page / provenance, not inside the installable package (Task 13) — see
+  // docs/MARKETPLACE-ASSET-INVENTORY.md's "VSIX packaging policy" section.
+  /^extension\/assets\/marketplace\//,
+  /^extension\/docs\/MARKETPLACE-/,
 ];
 
 // vsce packages README/CHANGELOG/LICENSE under its own Marketplace-convention names/casing
@@ -538,8 +549,31 @@ function checkVsixContent(vsixPath) {
         `VSIX manifest version (${content.version}) does not match package.json (${outerPkg.version})`,
       );
     }
+
+    // Packaged publisher/name/id must match the intended Marketplace identity, not just the
+    // outer package.json (guards against vsce packaging a stale/edited manifest).
+    const packagedId = `${content.publisher}.${content.name}`;
+    if (
+      content.publisher === EXPECTED_MARKETPLACE_PUBLISHER &&
+      content.name === EXPECTED_PACKAGE_NAME &&
+      packagedId === EXPECTED_EXTENSION_ID
+    ) {
+      record('vsix-manifest-identity', 'pass', `Packaged manifest identity is ${packagedId}.`);
+    } else {
+      record(
+        'vsix-manifest-identity',
+        'fail',
+        'Packaged manifest publisher/name does not match the expected Marketplace identity',
+        [
+          `publisher: ${content.publisher} (expected ${EXPECTED_MARKETPLACE_PUBLISHER})`,
+          `name: ${content.name} (expected ${EXPECTED_PACKAGE_NAME})`,
+          `id: ${packagedId} (expected ${EXPECTED_EXTENSION_ID})`,
+        ],
+      );
+    }
   } else {
     record('vsix-manifest-version', 'fail', 'extension/package.json not found inside VSIX.');
+    record('vsix-manifest-identity', 'fail', 'extension/package.json not found inside VSIX.');
   }
 
   // Credential-pattern scan over small text entries only (skip binaries and anything huge).
@@ -614,6 +648,501 @@ function reportHashes(vsixResult) {
 }
 
 // ---------------------------------------------------------------------------
+// 9. Marketplace identity, listing, and asset checks (Task 13)
+// ---------------------------------------------------------------------------
+
+export const EXPECTED_MARKETPLACE_PUBLISHER = 'fatihdumlupinar-dev';
+export const EXPECTED_PACKAGE_NAME = 'ai-limit-ledger';
+export const EXPECTED_EXTENSION_ID = `${EXPECTED_MARKETPLACE_PUBLISHER}.${EXPECTED_PACKAGE_NAME}`;
+// Task 13 intentionally does not change the version. Update this constant only as part of a
+// deliberate, separate version-bump task — never as a side effect of a Marketplace-listing change.
+export const EXPECTED_TASK_VERSION = '0.6.2';
+
+export const PLACEHOLDER_PUBLISHER_VALUES = new Set([
+  'local',
+  'test',
+  'example',
+  'placeholder',
+  'your-publisher-id',
+  'undefined',
+  '',
+]);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function checkPublisherIdentity() {
+  const pkg = readJson('package.json');
+  const publisher = pkg.publisher;
+  const issues = [];
+  if (publisher !== EXPECTED_MARKETPLACE_PUBLISHER) {
+    issues.push(`publisher is "${publisher}", expected "${EXPECTED_MARKETPLACE_PUBLISHER}"`);
+  }
+  if (PLACEHOLDER_PUBLISHER_VALUES.has(String(publisher).toLowerCase())) {
+    issues.push(`publisher "${publisher}" looks like a placeholder value`);
+  }
+  if (issues.length === 0) {
+    record(
+      'marketplace-publisher',
+      'pass',
+      `publisher is exactly "${EXPECTED_MARKETPLACE_PUBLISHER}", not a placeholder.`,
+    );
+  } else {
+    record('marketplace-publisher', 'fail', 'Marketplace publisher identity is incorrect', issues);
+  }
+}
+
+function checkExtensionIdentity() {
+  const pkg = readJson('package.json');
+  const issues = [];
+  if (pkg.name !== EXPECTED_PACKAGE_NAME) {
+    issues.push(`name is "${pkg.name}", expected "${EXPECTED_PACKAGE_NAME}"`);
+  }
+  const actualId = `${pkg.publisher}.${pkg.name}`;
+  if (actualId !== EXPECTED_EXTENSION_ID) {
+    issues.push(`computed extension id is "${actualId}", expected "${EXPECTED_EXTENSION_ID}"`);
+  }
+  if (pkg.version !== EXPECTED_TASK_VERSION) {
+    issues.push(
+      `version is "${pkg.version}", expected "${EXPECTED_TASK_VERSION}" (unchanged by Task 13)`,
+    );
+  }
+  if (pkg.private !== true) {
+    issues.push('private is not exactly true');
+  }
+  if (pkg.preview !== true) {
+    issues.push('preview is not exactly true (expected for the first Marketplace release)');
+  }
+  if (issues.length === 0) {
+    record(
+      'marketplace-extension-identity',
+      'pass',
+      `Extension identity is ${EXPECTED_EXTENSION_ID}, version ${EXPECTED_TASK_VERSION}, private+preview.`,
+    );
+  } else {
+    record(
+      'marketplace-extension-identity',
+      'fail',
+      'Extension identity/version/private/preview mismatch',
+      issues,
+    );
+  }
+}
+
+function checkRepositoryLinks() {
+  const pkg = readJson('package.json');
+  const issues = [];
+  const expectedRepoUrl = 'git+https://github.com/Fatih-Dumlupinar/ai-limit-ledger.git';
+  const expectedHomepage = 'https://github.com/Fatih-Dumlupinar/ai-limit-ledger#readme';
+  const expectedBugs = 'https://github.com/Fatih-Dumlupinar/ai-limit-ledger/issues';
+  if (pkg.repository?.url !== expectedRepoUrl) {
+    issues.push(`repository.url is "${pkg.repository?.url}", expected "${expectedRepoUrl}"`);
+  }
+  if (pkg.homepage !== expectedHomepage) {
+    issues.push(`homepage is "${pkg.homepage}", expected "${expectedHomepage}"`);
+  }
+  if (pkg.bugs?.url !== expectedBugs) {
+    issues.push(`bugs.url is "${pkg.bugs?.url}", expected "${expectedBugs}"`);
+  }
+  if (pkg.license !== 'MIT') {
+    issues.push(`license is "${pkg.license}", expected "MIT"`);
+  }
+  if (issues.length === 0) {
+    record(
+      'marketplace-links',
+      'pass',
+      'repository/homepage/bugs/license all match the expected GitHub owner/repo and MIT license.',
+    );
+  } else {
+    record(
+      'marketplace-links',
+      'fail',
+      'One or more identity links do not match the expected values',
+      issues,
+    );
+  }
+}
+
+function checkIconAsset() {
+  const pkg = readJson('package.json');
+  const iconField = pkg.icon;
+  const issues = [];
+  if (!iconField || !iconField.toLowerCase().endsWith('.png')) {
+    issues.push(`icon field "${iconField}" is not a .png path (SVG icons are not permitted)`);
+  }
+  const iconPath = iconField ? path.join(ROOT, iconField) : null;
+  if (!iconPath || !existsSync(iconPath)) {
+    issues.push(`icon file not found at "${iconField}"`);
+  } else {
+    const buf = readFileSync(iconPath);
+    const isPng = buf.length > 8 && buf.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
+    if (!isPng) {
+      issues.push('icon file does not have a valid PNG signature');
+    } else if (buf.length >= 24) {
+      const width = buf.readUInt32BE(16);
+      const height = buf.readUInt32BE(20);
+      if (width < 128 || height < 128) {
+        issues.push(`icon is ${width}x${height}, below the 128x128 Marketplace minimum`);
+      }
+    }
+  }
+  if (issues.length === 0) {
+    record('marketplace-icon', 'pass', 'Icon is a PNG at least 128x128.');
+  } else {
+    record('marketplace-icon', 'fail', 'Icon does not meet Marketplace requirements', issues);
+  }
+}
+
+export const MARKETPLACE_CATEGORY_ALLOWLIST = new Set([
+  'Programming Languages',
+  'Snippets',
+  'Linters',
+  'Themes',
+  'Debuggers',
+  'Formatters',
+  'Keymaps',
+  'SCM Providers',
+  'Other',
+  'Extension Packs',
+  'Language Packs',
+  'Data Science',
+  'Machine Learning',
+  'Visualization',
+  'Notebooks',
+  'Education',
+  'Testing',
+]);
+
+function checkCategoriesAndKeywords() {
+  const pkg = readJson('package.json');
+  const categories = pkg.categories || [];
+  const keywords = pkg.keywords || [];
+  const issues = [];
+  const invalidCategories = categories.filter((c) => !MARKETPLACE_CATEGORY_ALLOWLIST.has(c));
+  if (invalidCategories.length > 0) {
+    issues.push(`categories not on the Marketplace allowlist: ${invalidCategories.join(', ')}`);
+  }
+  if (categories.includes('Machine Learning')) {
+    issues.push(
+      '"Machine Learning" is not an accurate category — this extension reads provider usage metadata, it does not perform ML inference',
+    );
+  }
+  if (keywords.length > 30) {
+    issues.push(`${keywords.length} keywords exceeds the Marketplace limit of 30`);
+  }
+  const lower = keywords.map((k) => k.toLowerCase());
+  const duplicates = lower.filter((k, i) => lower.indexOf(k) !== i);
+  if (duplicates.length > 0) {
+    issues.push(`duplicate keyword(s): ${[...new Set(duplicates)].join(', ')}`);
+  }
+  if (issues.length === 0) {
+    record(
+      'marketplace-categories-keywords',
+      'pass',
+      `${categories.length} valid categor(y/ies), ${keywords.length}/30 unique keywords.`,
+    );
+  } else {
+    record('marketplace-categories-keywords', 'fail', 'Category/keyword policy violation', issues);
+  }
+}
+
+export const REQUIRED_README_EN_SECTIONS = [
+  'Why AI Limit Ledger?',
+  'Screenshots',
+  'Quick start',
+  'What this extension reads',
+  'What this extension does not read or store',
+  'Commands',
+  'Support',
+  'Non-affiliation',
+  'Known limitations',
+  'Troubleshooting',
+  'Settings',
+  'License',
+];
+
+export const REQUIRED_README_TR_SECTIONS = [
+  'Neden AI Limit Ledger?',
+  'Ekran görüntüleri',
+  'Hızlı başlangıç',
+  'Bu eklenti neyi okur',
+  'Bu eklenti neyi okumaz veya saklamaz',
+  'Komutlar',
+  'Destek',
+  'Bağlantısızlık bildirimi',
+  'Bilinen sınırlamalar',
+  'Sorun giderme',
+  'Ayarlar',
+  'Lisans',
+];
+
+function checkReadmeSections() {
+  const en = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const tr = readFileSync(path.join(ROOT, 'README.tr.md'), 'utf8');
+  const missingEn = REQUIRED_README_EN_SECTIONS.filter(
+    (h) => !new RegExp(`^#{1,3}\\s+${escapeRegExp(h)}\\s*$`, 'm').test(en),
+  );
+  const missingTr = REQUIRED_README_TR_SECTIONS.filter(
+    (h) => !new RegExp(`^#{1,3}\\s+${escapeRegExp(h)}\\s*$`, 'm').test(tr),
+  );
+  if (missingEn.length === 0 && missingTr.length === 0) {
+    record(
+      'marketplace-readme-sections',
+      'pass',
+      'All required README.md/README.tr.md sections are present.',
+    );
+  } else {
+    record('marketplace-readme-sections', 'fail', 'Required README sections are missing', [
+      ...missingEn.map((h) => `README.md missing: "${h}"`),
+      ...missingTr.map((h) => `README.tr.md missing: "${h}"`),
+    ]);
+  }
+}
+
+function checkNonAffiliationStatement() {
+  const en = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const tr = readFileSync(path.join(ROOT, 'README.tr.md'), 'utf8');
+  const providers = ['Microsoft', 'GitHub', 'OpenAI', 'Anthropic', 'xAI'];
+  const enOk =
+    /not affiliated with,?\s*endorsed by,?\s*or sponsored by/i.test(en) &&
+    providers.every((p) => en.includes(p));
+  const trOk = /bağlantılı\s+değildir/i.test(tr) && providers.every((p) => tr.includes(p));
+  if (enOk && trOk) {
+    record(
+      'marketplace-non-affiliation',
+      'pass',
+      'Non-affiliation notice present in both README.md and README.tr.md, naming all five providers.',
+    );
+  } else {
+    record('marketplace-non-affiliation', 'fail', 'Non-affiliation notice missing or incomplete', [
+      `README.md: ${enOk ? 'ok' : 'missing/incomplete'}`,
+      `README.tr.md: ${trOk ? 'ok' : 'missing/incomplete'}`,
+    ]);
+  }
+}
+
+export const FORBIDDEN_MARKETING_CLAIMS = [
+  { name: 'measures-all-usage', pattern: /measures?\s+all\s+(of\s+)?(your\s+)?AI\s+usage/i },
+  { name: 'all-data-official', pattern: /all\s+usage\s+data\s+comes?\s+from\s+official/i },
+  { name: 'no-credential-ever-read', pattern: /no\s+credentials?\s+(is|are)\s+ever\s+read/i },
+  { name: 'all-providers-realtime', pattern: /all\s+provider\s+data\s+is\s+real-?time/i },
+  { name: 'all-quotas-comparable', pattern: /all\s+provider\s+quotas?\s+are\s+comparable/i },
+  {
+    name: 'claude-account-wide-total',
+    pattern: /Claude\s+session\s+metrics?\s+(is|are)\s+an?\s+account[-\s]wide\s+total/i,
+  },
+  {
+    name: 'grok-exact-percentage',
+    pattern: /Grok\s+Free\s+accounts?\s+shows?\s+(an?\s+)?exact\s+usage\s+percentage/i,
+  },
+  {
+    name: 'copilot-allowance-guaranteed',
+    pattern: /Copilot\s+allowance\s+is\s+provided\s+for\s+every\s+account/i,
+  },
+  { name: 'fully-independent-official', pattern: /fully\s+independent\s+official\s+product/i },
+];
+
+function checkNoOverstatedClaims() {
+  const files = ['README.md', 'README.tr.md'];
+  const hits = [];
+  for (const file of files) {
+    const content = readFileSync(path.join(ROOT, file), 'utf8');
+    for (const { name, pattern } of FORBIDDEN_MARKETING_CLAIMS) {
+      if (pattern.test(content)) hits.push(`${file}: ${name}`);
+    }
+  }
+  if (hits.length === 0) {
+    record(
+      'marketplace-no-overstated-claims',
+      'pass',
+      'No overstated/absolute marketing claims found in README.md/README.tr.md.',
+    );
+  } else {
+    record('marketplace-no-overstated-claims', 'fail', 'Overstated marketing claim(s) found', hits);
+  }
+}
+
+function checkReadmeImageLinks() {
+  const files = ['README.md', 'README.tr.md'];
+  const insecure = [];
+  for (const file of files) {
+    const content = readFileSync(path.join(ROOT, file), 'utf8');
+    const imgPattern = /!\[[^\]]*\]\(([^)]+)\)/g;
+    let m;
+    while ((m = imgPattern.exec(content))) {
+      const url = m[1];
+      if (/^http:\/\//i.test(url) || /^file:\/\//i.test(url) || /^[A-Za-z]:\\/.test(url)) {
+        insecure.push(`${file}: ${url}`);
+      }
+    }
+  }
+  if (insecure.length === 0) {
+    record(
+      'marketplace-readme-image-links',
+      'pass',
+      'No insecure (http/file/local-path) image links in README files.',
+    );
+  } else {
+    record(
+      'marketplace-readme-image-links',
+      'fail',
+      'Insecure image link(s) found in README',
+      insecure,
+    );
+  }
+}
+
+export const PUBLISH_INVOCATION_PATTERN = /vsce\s+publish|vsce\.publish\s*\(|ovsx\s+publish/;
+
+async function checkNoPublishAutomation() {
+  const pkg = readJson('package.json');
+  const scriptHits = Object.entries(pkg.scripts || {}).filter(([, cmd]) =>
+    PUBLISH_INVOCATION_PATTERN.test(cmd),
+  );
+
+  const workflowFiles = (await walk('.github')).filter((f) => /\.ya?ml$/.test(f));
+  const workflowHits = [];
+  for (const f of workflowFiles) {
+    const content = readFileSync(path.join(ROOT, f), 'utf8');
+    if (PUBLISH_INVOCATION_PATTERN.test(content)) workflowHits.push(f);
+  }
+
+  // This file's own comments/messages necessarily discuss the concept of a publish invocation
+  // (e.g. this very check's name and messages) without actually invoking one — exclude it from
+  // its own scripts/ scan rather than trying to keep every message forever free of a substring
+  // match against PUBLISH_INVOCATION_PATTERN.
+  const selfPath = fileURLToPath(import.meta.url);
+  const scriptDirFiles = (await walk('scripts')).filter(
+    (f) => isLikelyTextFile(f) && path.resolve(ROOT, f) !== selfPath,
+  );
+  const scriptDirHits = [];
+  for (const f of scriptDirFiles) {
+    const content = readFileSync(path.join(ROOT, f), 'utf8');
+    if (PUBLISH_INVOCATION_PATTERN.test(content)) scriptDirHits.push(f);
+  }
+
+  const hits = [
+    ...scriptHits.map(([name]) => `package.json script "${name}"`),
+    ...workflowHits,
+    ...scriptDirHits,
+  ];
+  if (hits.length === 0) {
+    record(
+      'marketplace-no-publish-automation',
+      'pass',
+      'No Marketplace publish-command invocation (vsce/ovsx) found in package.json scripts, .github workflows, or scripts/.',
+    );
+  } else {
+    record(
+      'marketplace-no-publish-automation',
+      'fail',
+      'A publish invocation was found — Task 13 must not add release automation',
+      hits,
+    );
+  }
+}
+
+function checkNoEnvFile() {
+  const envPath = path.join(ROOT, '.env');
+  if (existsSync(envPath)) {
+    record(
+      'marketplace-no-env-file',
+      'fail',
+      'A .env file exists in the repository root — must never be committed.',
+    );
+  } else {
+    record('marketplace-no-env-file', 'pass', 'No .env file present in the repository root.');
+  }
+}
+
+export const MARKETPLACE_SCREENSHOT_FILENAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*\.png$/;
+const MAX_SCREENSHOT_BYTES = 1024 * 1024; // 1 MB budget per Marketplace screenshot
+
+async function checkMarketplaceScreenshotAssets() {
+  const dir = 'assets/marketplace';
+  if (!existsSync(path.join(ROOT, dir))) {
+    record(
+      'marketplace-screenshots',
+      'warn',
+      'No assets/marketplace/ directory yet — screenshots pending, see docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md.',
+    );
+    return;
+  }
+  const entries = await readdir(path.join(ROOT, dir));
+  const pngFiles = entries.filter((f) => f.toLowerCase().endsWith('.png'));
+  if (pngFiles.length === 0) {
+    record(
+      'marketplace-screenshots',
+      'warn',
+      'assets/marketplace/ exists but contains no PNG files yet.',
+    );
+    return;
+  }
+  const issues = [];
+  for (const file of pngFiles) {
+    const full = path.join(ROOT, dir, file);
+    const buf = readFileSync(full);
+    const isPng = buf.length > 8 && buf.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
+    if (!isPng) issues.push(`${file}: not a valid PNG signature`);
+    if (buf.length > MAX_SCREENSHOT_BYTES) {
+      issues.push(`${file}: ${buf.length} bytes exceeds the ${MAX_SCREENSHOT_BYTES} byte budget`);
+    }
+    if (!MARKETPLACE_SCREENSHOT_FILENAME_PATTERN.test(file)) {
+      issues.push(`${file}: filename does not match the lowercase-kebab-case.png policy`);
+    }
+    // Scan raw bytes for personal-path-shaped ASCII text embedded as PNG metadata (tEXt/iTXt).
+    const text = buf.toString('latin1');
+    for (const pattern of ABSOLUTE_PATH_PATTERNS) {
+      pattern.lastIndex = 0;
+      if (pattern.test(text) && !KNOWN_SAFE_FIXTURE_MARKERS.test(text)) {
+        issues.push(`${file}: possible personal path found in PNG bytes/metadata`);
+      }
+    }
+  }
+  if (issues.length === 0) {
+    record(
+      'marketplace-screenshots',
+      'pass',
+      `${pngFiles.length} Marketplace screenshot(s) pass format/size/filename/personal-data checks.`,
+    );
+  } else {
+    record('marketplace-screenshots', 'fail', 'Marketplace screenshot policy violation(s)', issues);
+  }
+}
+
+function checkPackagedReadmeImages(vsixResult) {
+  if (!vsixResult) return;
+  const readmeEntry = vsixResult.entries.find((e) => e.fileName === 'extension/readme.md');
+  if (!readmeEntry) {
+    record('vsix-readme-images', 'warn', 'No packaged extension/readme.md found to check.');
+    return;
+  }
+  const content = readZipEntryContent(vsixResult.buffer, readmeEntry).toString('utf8');
+  const imgPattern = /!\[[^\]]*\]\(([^)]+)\)/g;
+  const broken = [];
+  let m;
+  while ((m = imgPattern.exec(content))) {
+    const url = m[1];
+    if (/^https:\/\//i.test(url)) continue; // rewritten-to-GitHub or already absolute HTTPS
+    broken.push(
+      /^http:\/\//i.test(url) || /^file:\/\//i.test(url) || /^[A-Za-z]:\\/.test(url)
+        ? `${url} (insecure/local scheme)`
+        : `${url} (unexpected unrewritten relative path in packaged README)`,
+    );
+  }
+  if (broken.length === 0) {
+    record(
+      'vsix-readme-images',
+      'pass',
+      'Packaged README has no insecure or unrewritten-relative image links.',
+    );
+  } else {
+    record('vsix-readme-images', 'fail', 'Packaged README image link issue(s)', broken);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
@@ -627,6 +1156,19 @@ async function main() {
   checkRequiredSourceFiles();
   checkLocalizationParity();
 
+  checkPublisherIdentity();
+  checkExtensionIdentity();
+  checkRepositoryLinks();
+  checkIconAsset();
+  checkCategoriesAndKeywords();
+  checkReadmeSections();
+  checkNonAffiliationStatement();
+  checkNoOverstatedClaims();
+  checkReadmeImageLinks();
+  await checkNoPublishAutomation();
+  checkNoEnvFile();
+  await checkMarketplaceScreenshotAssets();
+
   let vsixResult;
   if (vsixArg) {
     const vsixPath = path.isAbsolute(vsixArg) ? vsixArg : path.join(ROOT, vsixArg);
@@ -634,6 +1176,7 @@ async function main() {
       record('vsix-presence', 'fail', `VSIX path given but not found: ${vsixArg}`);
     } else {
       vsixResult = checkVsixContent(vsixPath);
+      checkPackagedReadmeImages(vsixResult);
     }
   } else {
     record(

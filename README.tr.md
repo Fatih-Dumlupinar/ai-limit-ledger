@@ -5,13 +5,31 @@ _[English](README.md)_
 [![CI](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml)
 
-AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok için AI kodlama kullanım limitlerini, kotaları, sıfırlanma pencerelerini ve sağlayıcı etkinliğini izlemeye yönelik, gizliliği önceleyen bir VS Code eklentisidir. Copilot, yalnızca GitHub kimlik doğrulamasından sonra veya açıkça sağlanan Plan-read ince taneli bir PAT ile resmi GitHub Billing REST API'sini kullanır. Grok kullanımı açıkça etkinleştirilene kadar kapalıdır; deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır ve CLI-proxy yedeği de deneysel ve isteğe bağlıdır.
+Codex, Claude Code, GitHub Copilot ve Grok kullanımını, kotalarını ve sıfırlanma zamanlarını VS
+Code durum çubuğundan ve dashboard'dan izleyin — gizliliği önceleyen, telemetrisiz.
 
-AI Limit Ledger bağımsız bir topluluk projesidir; OpenAI, Anthropic, GitHub veya xAI ile bağlantılı değildir ve bu kuruluşlar tarafından desteklenmemektedir.
+## Preview durumu
 
-AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok sağlayıcı durumlarını tek bir Dashboard'da ve VS Code durum çubuğunda gösterir. Sağlayıcı hataları birbirinden izole edilir; eksik bir CLI hiçbir zaman bir sağlayıcı kartını kaldırmaz.
+Bu bir **preview** sürümdür. Sağlayıcı entegrasyonları, ayarlar ve arayüz yüzeyleri işlevsel kabul
+edilir ancak sürümler arasında hâlâ değişebilir; aşağıdaki [Bilinen sınırlamalar](#bilinen-sınırlamalar)
+bölümü şu anki, dürüst boşluk listesidir.
 
-Üzerine gelindiğinde Markdown kullanım tablosu görünür; tıklandığında sıfırlanma zamanları, plan, CLI/App Server durumu ve kullanılabilir token etkinliği ile temaya duyarlı bir sağlayıcı panosu açılır.
+## Ekran görüntüleri
+
+Marketplace ekran görüntüleri hazırlanıyor ve henüz bu README'ye gömülmedi — nasıl üretileceği için
+bkz. [`docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`](docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md) (gerçek
+eklenti renderer'ı, yalnızca sentetik fixture verisi, gerçek hesap/kullanım verisi yok). Bu arada
+hiçbir mockup veya placeholder görsel kullanılmaz.
+
+## Neden AI Limit Ledger?
+
+Codex, Claude Code, GitHub Copilot ve Grok'u bir arada kullanmak genellikle bir rate limit'e veya
+sıfırlanma penceresine ne kadar yaklaştığınızı görmek için birkaç ayrı dashboard kontrol etmek
+anlamına gelir. AI Limit Ledger, zaten erişiminiz olan sağlayıcı durumlarını, yeni bir hesap, yeni
+bir giriş veya kendi telemetrisi eklemeden tek bir VS Code durum çubuğu öğesinde ve tek bir
+dashboard'da bir araya getirir. Her sağlayıcının kendi resmî (veya açıkça etiketlenmişse deneysel)
+yerel ya da ağ yüzeyinden okur — asla bir modele çağrı yapmaz, kullanımı prompt'larınızdan tahmin
+etmez ve sağlayıcıları tek bir uydurma sayıda birleştirmez.
 
 ## Desteklenen sağlayıcılar
 
@@ -24,32 +42,21 @@ AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok sağlayıcı durumla
 
 Tam kaynak, hesap/oturum içgörü kapsamı ve deneysel sınırlar için [sağlayıcı yetenek matrisine](docs/PROVIDER_CAPABILITY_MATRIX.md) bakın.
 
-## Rich ve Safe Dashboard
+## Temel özellikler
 
-Varsayılan **Rich Dashboard**, sıfırlanma zamanları, plan, CLI/App Server durumu ve kullanılabilir token etkinliği ile temalı bir Webview panelidir. **Safe Dashboard** (`AI Limit Ledger: Select Dashboard Mode` → `Safe Native`), aynı bilgiyi Webview veya Service Worker API'si kullanmadan salt okunur bir metin editörü belgesi olarak sunar; kısıtlı veya Webview'in devre dışı olduğu ortamlar içindir. Her ikisi de aynı tipli sağlayıcı anlık görüntülerini okur ve desteklenen alanlarda birbirleriyle eşleşir.
+- Codex, Claude Code, GitHub Copilot ve Grok için tek bir durum çubuğu öğesi ve tek bir dashboard;
+  sağlayıcı hataları izole edilir — eksik bir CLI hiçbir zaman bir sağlayıcı kartını kaldırmaz.
+- Aynı tipli sağlayıcı anlık görüntülerinden render edilen ve birbirleriyle eşleşen bir **Rich
+  Dashboard** (temalı webview) ve bir **Safe Dashboard** (webview'siz, salt okunur metin belgesi).
+- Markdown kullanım tablosu içeren hover tooltip; tıklandığında tam dashboard açılır.
+- Her çalışma zamanı yüzeyinde tipli İngilizce/Türkçe yerelleştirme.
+- Sıfır üretim bağımlılığı ve telemetri yok.
 
-## Veri ve gizlilik
+## Hızlı başlangıç
 
-Codex yalnızca yerel ve salt okunur kalır. Copilot, VS Code'un GitHub Authentication API'sinden gelen bir oturum veya yalnızca VS Code SecretStorage'da saklanan, kullanıcı tarafından girilen bir Plan-read PAT ile `GET /user` ve resmî kullanıcı AI-kredi faturalama uç noktasını çağırır; token'lar asla loglanmaz veya global/workspace state'e yazılmaz ve hiçbir repository/admin/write izni istenmez. Grok, yalnızca sağlayıcısı açıkça etkinleştirildikten sonra `grok agent stdio`'yu başlatır; AI Limit Ledger Grok kimlik doğrulama dosyalarını, prompt/transcript/kod verisini okumaz veya `grok login`'i otomatik olarak çalıştırmaz. Telemetri yoktur.
-
-## CI ve repository güvenliği
-
-Task 12 dört salt-okunur repository kontrolü ekler: `CI`, Ubuntu ve Windows üzerinde derleme,
-lint, biçim, audit, test ve VSIX paketleme yapar; `CodeQL`, JavaScript/TypeScript kodunu pull
-request'lerde, `main` push'larında ve varsayılan branch üzerinde haftalık tarar; `Secret Scan`,
-resmî Gitleaks CLI release'ini SHA-256 ile doğruladıktan sonra tam Git geçmişini redacted çıktıyla
-tarar; `Dependency Review` ise pull request'lerde moderate ve üzeri bağımlılık açıklarını reddeder.
-Dependabot npm ve GitHub Actions güncellemelerini haftalık kontrol eder ve otomatik merge yapmaz.
-
-Tüm harici Action'lar release sürüm yorumu ile tam commit SHA'ya sabitlenmiştir. Workflow'lar
-`pull_request` kullanır, `pull_request_target` kullanmaz, repository secret açığa çıkarmaz ve
-minimum izin ister. Güncel GitHub API metadata'sı native secret scanning ve push protection'ı
-etkin bildiriyor; Task 12 bu ayarları değiştirmez ve bağımsız secret scan'i zorunlu tutar.
-Detaylar için [CI güvenlik tasarımına](docs/CI-SECURITY-DESIGN.md) ve [ruleset kontrol listesine](docs/BRANCH-RULESET.md) bakın.
-
-## Kurulum durumu
-
-Bu eklenti **henüz Visual Studio Code Marketplace'te yayınlanmamıştır**. Şu anda bir Marketplace listesi veya GitHub Release kurulum yolu yoktur — bu kurulum yolu, Marketplace publisher'ı kurulduktan sonra planlanmaktadır (bkz. [Yol haritası](#yol-haritası)). Şimdilik kaynaktan kurun:
+Bu eklenti **henüz Visual Studio Code Marketplace'te yayınlanmamıştır**. Şu anda bir Marketplace
+listesi veya GitHub Release kurulum yolu yoktur — bu kurulum yolu, Marketplace publisher incelemesi
+sonrasında planlanmaktadır (bkz. [Yol haritası](#yol-haritası)). Şimdilik kaynaktan kurun:
 
 1. Bu repository'yi klonlayın ve bir `.vsix` paketi oluşturmak için [Geliştirme kurulumu](#geliştirme-kurulumu) bölümünü izleyin.
 2. Codex CLI'yi (veya kullandığınız hangi sağlayıcı ise) kurun ve oturum açın.
@@ -60,6 +67,52 @@ Bu eklenti **henüz Visual Studio Code Marketplace'te yayınlanmamıştır**. Ş
    ```
 
 Webview kullanmayan bir ayrıntı görünümü için `AI Limit Ledger: Select Dashboard Mode` komutunu çalıştırıp `Safe Native` seçin, ardından `AI Limit Ledger: Open Dashboard` çalıştırın. Safe Dashboard, salt okunur bir metin editörü belgesi olarak açılır ve Webview veya Service Worker API'si kullanmaz.
+
+## Rich ve Safe Dashboard
+
+Varsayılan **Rich Dashboard**, sıfırlanma zamanları, plan, CLI/App Server durumu ve kullanılabilir token etkinliği ile temalı bir Webview panelidir. **Safe Dashboard** (`AI Limit Ledger: Select Dashboard Mode` → `Safe Native`), aynı bilgiyi Webview veya Service Worker API'si kullanmadan salt okunur bir metin editörü belgesi olarak sunar; kısıtlı veya Webview'in devre dışı olduğu ortamlar içindir. Her ikisi de aynı tipli sağlayıcı anlık görüntülerini okur ve desteklenen alanlarda birbirleriyle eşleşir.
+
+## Sağlayıcı gereksinimleri
+
+- **Codex** — resmî Codex CLI kurulu ve oturum açık olmalı; AI Limit Ledger yalnızca yerel App Server ile konuşur.
+- **Claude Code** — resmî Claude Code CLI; status-line köprüsünü kurmak için **Enable Claude Code Integration** çalıştırın. İsteğe bağlı deneysel OAuth kullanım kontrolü ayrı, açık bir onay gerektirir.
+- **GitHub Copilot** — bir VS Code GitHub kimlik doğrulama oturumu veya yalnızca **Plan: read** izinli ince taneli bir PAT; **Connect GitHub Copilot Usage** ile bağlanır.
+- **Grok** — resmî Grok Build CLI, `grok login` ile oturum açılmış ve **Enable Grok Usage** açıkça çalıştırılmış olmalı; varsayılan olarak kapalıdır.
+
+## Resmî, deneysel ve türetilmiş veri
+
+Her sağlayıcı kartı ve alanı kaynağıyla etiketlenir. **Resmî**, verinin doğrudan sağlayıcının
+belgelediği bir API'den veya yerel bir entegrasyon noktasından geldiği anlamına gelir (Codex'in App
+Server'ı, Copilot'un GitHub Billing REST API'si, Claude'un status-line entegrasyonu, Grok'un ACP
+aktarımı). **Deneysel**, kaynağın belgelenmemiş veya yalnızca isteğe-bağlı-katılımla kullanılan bir
+uç nokta olduğu ve haber verilmeden değişebileceği veya çalışmayı durdurabileceği anlamına gelir
+(Claude'un CLI'siz OAuth kullanım kontrolü, Grok'un `x.ai/billing` capability'si ve CLI-proxy
+yedeği) — bunlar her zaman varsayılan olarak kapalıdır veya ayrı, açık bir onay adımı gerektirir ve
+arayüz bunları her göründükleri yerde deneysel olarak etiketler. **Türetilmiş** alanlar (örneğin
+yapılandırılmış bir plandan hesaplanan bir Copilot ödeneği), sağlayıcı tarafından doğrudan
+bildirilmiş gibi değil, açıkça hesaplanmış olarak işaretlenir. Sağlayıcı başına tam döküm için
+`docs/PROVIDER_CAPABILITY_MATRIX.md` dosyasına bakın.
+
+## Veri ve gizlilik
+
+Codex yalnızca yerel ve salt okunur kalır. Copilot, VS Code'un GitHub Authentication API'sinden gelen bir oturum veya yalnızca VS Code SecretStorage'da saklanan, kullanıcı tarafından girilen bir Plan-read PAT ile `GET /user` ve resmî kullanıcı AI-kredi faturalama uç noktasını çağırır; token'lar asla loglanmaz veya global/workspace state'e yazılmaz ve hiçbir repository/admin/write izni istenmez. Grok, yalnızca sağlayıcısı açıkça etkinleştirildikten sonra `grok agent stdio`'yu başlatır; AI Limit Ledger Grok kimlik doğrulama dosyalarını, prompt/transcript/kod verisini okumaz veya `grok login`'i otomatik olarak çalıştırmaz. Telemetri yoktur.
+
+### Bu eklenti neyi okur
+
+- Codex'in yerel App Server yanıtları (`account/read`, `account/rateLimits/read`, `account/usage/read`).
+- Entegrasyonu etkinleştirdiğinizde Claude Code'un kendi status-line JSON çıktısı; ve yalnızca ayrıca onay verirseniz, deneysel kullanım kontrolü için `~/.claude/.credentials.json` dosyasından bellekte OAuth erişim belirteci.
+- Bir VS Code GitHub kimlik doğrulama oturumu veya kullanıcı tarafından sağlanan Plan-read PAT kullanılarak GitHub Copilot'un faturalama uç noktaları.
+- Yalnızca **Enable Grok Usage** çalıştırdıktan sonra `grok agent stdio` üzerinden Grok Build'in ACP yanıtları.
+- Kendi AI Limit Ledger ayarlarınız (`aiLimitLedger.*`).
+
+### Bu eklenti neyi okumaz veya saklamaz
+
+- Hiçbir sağlayıcıdan model prompt'ları, tamamlamalar, transcript'ler veya kaynak kod.
+- Kimlik bilgisi değerleri hiçbir zaman loglara, Output Channel'a, diagnostics dışa aktarımlarına veya Marketplace/telemetri servislerine yazılmaz — telemetri yoktur.
+- Resmî sağlayıcı bağlantılarından tarayıcı oturumları, çerezler veya sayfa içeriği.
+- Deneysel kullanım kontrolü sırasında bile Claude'un kimlik bilgisi dosyasından refresh token, hesap ID, e-posta veya abonelik-planı alanları.
+- Ham sağlayıcı API yanıtları kalıcı hale getirilmez — yalnızca tipli, izin listeli, sağlayıcıya özel değerler saklanır.
+- Sağlayıcı toplamları (token, kredi, mesaj, dolar, yüzde) sağlayıcılar arasında asla toplanmaz; eksik bir değer sıfır olarak değil, kullanılamaz olarak gösterilir.
 
 ## Ayarlar
 
@@ -80,6 +133,37 @@ Webview kullanmayan bir ayrıntı görünümü için `AI Limit Ledger: Select Da
 Tipli ayarlar servisi sağlayıcı takma adlarını normalleştirir, yinelenenleri kaldırır, bilinmeyen kimlikleri yok sayar, eşik sıralamasını ve sayısal sınırları doğrular ve yalnızca güvenli tanılar bildirir. Dashboard ve durum çubuğu sağlayıcı sırası/görünürlüğü birbirinden bağımsızdır. `display.percentageMode`; `remaining`, `used` ve `both` değerlerini destekler; dil `auto`, `en` ve `tr` değerlerini destekler; zaman biçimi `locale`, `relative`, `absolute` ve `both` değerlerini destekler. Tooltip yoğunluğu, bildirim/log seviyeleri ve sınırlı son-bilinen-iyi önbellek politikası da yapılandırılabilir.
 
 Komut Paletinden **Select Status Bar Mode**, **Select Percentage Display**, **Reset Display Settings** ve **Copy Redacted Effective Settings** kullanın. Sağlayıcı seçimi değişiklikleri hemen uzlaştırılır; çalıştırılabilir dosya değişiklikleri yalnızca algılamayı yeniden çalıştırır. Yenileme değişiklikleri mevcut minimum-aralık, single-flight, lease ve backoff korumalarını korur. Machine kapsamlı yollar ve deneysel ayarlar workspace değerlerini yok sayar; deneysel Copilot/Grok taşıyıcıları ayrıca ayrı onay meta verisi gerektirir.
+
+## Komutlar
+
+Tüm komutlar Komut Paletinden (`Ctrl+Shift+P`) `AI Limit Ledger:` önekiyle kullanılabilir. En sık
+kullanılanlar:
+
+- **Open Dashboard**, **Open Rich Dashboard**, **Open Safe Dashboard**, **Select Dashboard Mode**
+- **Refresh**, **Refresh Codex**, **Refresh Claude**, **Refresh GitHub Copilot Usage**, **Refresh Grok Usage**
+- **Enable Claude Code Integration**, **Disable Claude Code Integration**, **Repair Claude Code Integration**, **Diagnose Claude Code Integration**
+- **Enable CLI-free Claude Usage**, **Disable CLI-free Claude Usage**
+- **Connect GitHub Copilot Usage**, **Disconnect GitHub Copilot Usage**, **Configure Copilot Plan**, **Diagnose GitHub Copilot Integration**
+- **Enable Grok Usage**, **Disable Grok Usage**, **Recheck Grok Installation**, **Launch Grok Login**, **Diagnose Grok Integration**
+- **Select Status Bar Mode**, **Select Percentage Display**, **Select Display Language**, **Reset Display Settings**
+- **Copy Redacted Diagnostics**, **Copy Redacted Effective Settings**, **Export Redacted Support Bundle**, **Show Logs**, **Clear Cached Usage**
+
+Komut kimlikleri (`aiLimitLedger.*`) çevrilmez; tam liste `package.json`'ın `contributes.commands` bölümünde tanımlıdır.
+
+## CI ve repository güvenliği
+
+Task 12 dört salt-okunur repository kontrolü ekler: `CI`, Ubuntu ve Windows üzerinde derleme,
+lint, biçim, audit, test ve VSIX paketleme yapar; `CodeQL`, JavaScript/TypeScript kodunu pull
+request'lerde, `main` push'larında ve varsayılan branch üzerinde haftalık tarar; `Secret Scan`,
+resmî Gitleaks CLI release'ini SHA-256 ile doğruladıktan sonra tam Git geçmişini redacted çıktıyla
+tarar; `Dependency Review` ise pull request'lerde moderate ve üzeri bağımlılık açıklarını reddeder.
+Dependabot npm ve GitHub Actions güncellemelerini haftalık kontrol eder ve otomatik merge yapmaz.
+
+Tüm harici Action'lar release sürüm yorumu ile tam commit SHA'ya sabitlenmiştir. Workflow'lar
+`pull_request` kullanır, `pull_request_target` kullanmaz, repository secret açığa çıkarmaz ve
+minimum izin ister. Güncel GitHub API metadata'sı native secret scanning ve push protection'ı
+etkin bildiriyor; Task 12 bu ayarları değiştirmez ve bağımsız secret scan'i zorunlu tutar.
+Detaylar için [CI güvenlik tasarımına](docs/CI-SECURITY-DESIGN.md) ve [ruleset kontrol listesine](docs/BRANCH-RULESET.md) bakın.
 
 ## Geliştirme gereksinimleri
 
@@ -102,9 +186,9 @@ CLI'siz deneysel Claude kullanım kontrolü, `api.anthropic.com/api/oauth/usage`
 Ortak tipli içgörü modeli; hesap metriklerini, en son oturum metriklerini, günlük eğilimleri ve kaynak kökenini birbirinden ayrı tutar. Summary modu en fazla beş güvenli alan gösterir; detailed modu kalan izin verilen alanları genişletilebilir bir bölümde sunar; hidden modu birincil kota kartlarını ve sıfırlanma bilgisini değiştirmeden bırakır. Geçersiz, negatif, sonsuz olmayan, bayat veya kullanılamayan değerler, sahte yüzdelere dönüştürülmek yerine atlanır veya etiketlenir.
 
 - Codex yalnızca resmî App Server `account/read`, `account/rateLimits/read` (güncelleme bildirimi dahil) ve `account/usage/read`'i kullanır. Günlük kullanım sıralanır, yinelenen tarihler birleştirilir ve dahili olarak en fazla 30 gün tutulur; varsayılan görünüm son 14 gündür. Sıfırlanma kredileri ve gözlemlenen son kullanma tarihleri yalnızca görüntüleme amaçlıdır.
-- Claude'un resmî status-line anlık görüntüsü, hesap 5 saatlik/7 günlük limitlerini en son gözlemlenen CLI oturumundan ayrı tutar. Model, bağlam, girdi/çıktı/önbellek token'ları, tahmini maliyet, süreler, satır sayıları, fast/effort/thinking/output-style alanları açık izin listesi alanlarıdır. Deneysel OAuth hesap limitleri asla resmî oturum metriklerinin üzerine yazılmaz.
-- GitHub Copilot, AI kredilerini birincil metrik yapar. Bir ödenek yalnızca yetkiliyse veya açıkça kullanıcı tarafından yapılandırılmışsa gösterilir ve hesaplanmış olarak işaretlenir. Premium etkileşimler, sohbet ve tamamlamalar ayrı kalır; organizasyon yönetimi aylık bir payda değildir.
-- Grok, deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır. CLI-proxy faturalama yedeği de deneyseldir ve isteğe bağlıdır. Eksik ürün dökümleri, boş bir ürün dizisi yerine gösterilmemiş olarak kalır; `/usage`, kullanıcının Grok Build içinde çalıştırdığı resmî hesap görünümüdür ve AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz.
+- Claude'un resmî status-line anlık görüntüsü, hesap 5 saatlik/7 günlük limitlerini en son gözlemlenen CLI oturumundan ayrı tutar — bu oturum içgörüsü her zaman en son gözlemlenen yerel CLI oturumunu yansıtır, hesap genelinde bir toplamı değil. Model, bağlam, girdi/çıktı/önbellek token'ları, tahmini maliyet, süreler, satır sayıları, fast/effort/thinking/output-style alanları açık izin listesi alanlarıdır. Deneysel OAuth hesap limitleri asla resmî oturum metriklerinin üzerine yazılmaz.
+- GitHub Copilot, AI kredilerini birincil metrik yapar. Bir ödenek yalnızca yetkiliyse veya açıkça kullanıcı tarafından yapılandırılmışsa gösterilir ve hesaplanmış olarak işaretlenir; organizasyon tarafından yönetilen hesaplarda kişisel bir ödenek olmayabilir ve bu, tahmin edilmek yerine kullanılamaz olarak gösterilir. Premium etkileşimler, sohbet ve tamamlamalar ayrı kalır; organizasyon yönetimi aylık bir payda değildir.
+- Grok, deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır. CLI-proxy faturalama yedeği de deneyseldir ve isteğe bağlıdır. Ücretsiz bir Grok hesabı hiç sayısal bir kullanım yüzdesi göstermeyebilir — bu, tahmin edilmek yerine kullanılamaz olarak gösterilir. Eksik ürün dökümleri, boş bir ürün dizisi yerine gösterilmemiş olarak kalır; `/usage`, kullanıcının Grok Build içinde çalıştırdığı resmî hesap görünümüdür ve AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz.
 
 Kaynak ve sınırlama matrisi için `docs/PROVIDER_CAPABILITY_MATRIX.md` dosyasına bakın.
 
@@ -151,11 +235,11 @@ Mevcut etiketler **Open GitHub Copilot Billing** ve **Open Grok Billing**'dir. G
 
 ## GitHub Copilot bağlantısı
 
-**AI Limit Ledger: Connect GitHub Copilot Usage** komutunu çalıştırın. Önce VS Code GitHub Authentication denenir. Faturalama uç noktasını karşılayamazsa, **Use fine-grained PAT**'i seçin ve yalnızca **Plan: read** verin. Yalnızca AI Limit Ledger'ın kendi PAT sırrını kaldırmak için **Disconnect GitHub Copilot Usage** çalıştırın. GitHub faturalaması bireysel Copilot isteklerinin gerisinde kalabilir, bu yüzden Dashboard bunu açıkça belirtir.
+**AI Limit Ledger: Connect GitHub Copilot Usage** komutunu çalıştırın. Önce VS Code GitHub Authentication denenir. Faturalama uç noktasını karşılayamazsa, **Use fine-grained PAT**'i seçin ve yalnızca **Plan: read** verin. Yalnızca AI Limit Ledger'ın kendi PAT sırrını kaldırmak için **Disconnect GitHub Copilot Usage** çalıştırın. GitHub faturalaması bireysel Copilot isteklerinin gerisinde kalabilir, bu yüzden Dashboard bunu açıkça belirtir. Organizasyon tarafından yönetilen Copilot hesaplarında kişisel bir ödenek hiç görünmeyebilir; bu, tahmin edilmek yerine kullanılamaz olarak gösterilir.
 
 ## Grok Build kullanımı
 
-**Enable Grok Usage** çalıştırana kadar Grok kullanımı kapalıdır. xAI/Grok Build kılavuzundan resmî CLI'yi kurun, açılan VS Code terminalinde `grok login` ile oturum açın, ardından **Recheck Grok Installation** çalıştırın. Etkinleştirildiğinde AI Limit Ledger resmî Grok Build ACP aktarımını kullanır; `x.ai/billing` capability'si ve CLI-proxy faturalama yedeği deneyseldir, yedek isteğe bağlıdır. Topluluk `pawelhuryn.grok-vscode-phuryn` eklentisi yalnızca topluluk kaynaklı olarak algılanır ve asla resmî faturalama kaynağı olarak ele alınmaz. Resmî hesap görünümü için Grok Build içinde `/usage` kullanın; AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz.
+**Enable Grok Usage** çalıştırana kadar Grok kullanımı kapalıdır. xAI/Grok Build kılavuzundan resmî CLI'yi kurun, açılan VS Code terminalinde `grok login` ile oturum açın, ardından **Recheck Grok Installation** çalıştırın. Etkinleştirildiğinde AI Limit Ledger resmî Grok Build ACP aktarımını kullanır; `x.ai/billing` capability'si ve CLI-proxy faturalama yedeği deneyseldir, yedek isteğe bağlıdır. Topluluk `pawelhuryn.grok-vscode-phuryn` eklentisi yalnızca topluluk kaynaklı olarak algılanır ve asla resmî faturalama kaynağı olarak ele alınmaz. Resmî hesap görünümü için Grok Build içinde `/usage` kullanın; AI Limit Ledger `/usage` komutunu otomatik çalıştırmaz. Ücretsiz Grok hesapları, billing capability'sinden hiç sayısal bir kullanım yüzdesi almayabilir.
 
 Başarılı bir Repair'dan sonra Claude kartı **Restart Claude CLI session** gösterir. Mevcut Claude CLI oturumlarını kapatın, tamamen yeni bir tane başlatın ve bir yanıtı tamamlayın. Geçerli bir anlık görüntü, yeniden başlatma/bekleme mesajını otomatik olarak kaldırır.
 
@@ -179,6 +263,14 @@ Dashboard **Repair required** gösteriyorsa veya Enable'dan sonra Claude kullan�
 6. **AI Limit Ledger: Open Dashboard** komutunu yeniden açın (veya bir an bekleyin) — panoyu yeniden açmaya gerek kalmadan geçerli bir anlık görüntü geldiğinde canlı olarak güncellenir.
 
 Önceden `ready` tanı durumuyla gerçek bir tamamlanmış yanıttan sonra kullanım hâlâ görünmüyorsa, **Copy redacted diagnostics** kullanın ve sorunu bildirin — kopyalanan metin asla komutları, ham JSON'ı, kimlik bilgilerini veya tam ana dizin yolunuzu içermez.
+
+## Destek
+
+Genel sorun giderme adımları için [SUPPORT.md](SUPPORT.md) dosyasına bakın — eksik içgörüler,
+ayarlar/diagnostics dışa aktarımları, canlı yerelleştirme kontrolleri, hata bildirimleri ve
+sağlayıcı başına diagnose komutlarını kapsar. Orada kapsanmayan başka bir konu için bir
+[GitHub Issue](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/issues) açın. Bir güvenlik açığı
+için herkese açık bir issue açmayın — bkz. [Güvenlik bildirimi](#güvenlik-bildirimi).
 
 ## Geliştirme kurulumu
 
@@ -216,18 +308,34 @@ Bir güvenlik açığı için herkese açık bir issue açmayın. Özel olarak n
 ## Bilinen sınırlamalar
 
 - Henüz Visual Studio Code Marketplace'te yayınlanmadı; yalnızca kaynaktan kurulum.
-- Claude'un CLI'siz OAuth kullanım kontrolü ve Grok'un CLI-proxy faturalama yedeği ikisi de **deneyseldir**, varsayılan olarak kapalıdır ve haber verilmeden değişebilecek veya çalışmayı durdurabilecek belgelenmemiş sağlayıcı uç noktalarına bağımlıdır.
-- GitHub Copilot faturalaması bireysel Copilot isteklerinin gerisinde kalabilir; Dashboard bunu tahmin etmek yerine açıkça belirtir.
+- Claude'un CLI'siz OAuth kullanım kontrolü, Grok'un deneysel `x.ai/billing` capability'si ve Grok'un CLI-proxy faturalama yedeği ikisi de **deneyseldir**, varsayılan olarak kapalıdır veya isteğe bağlıdır ve haber verilmeden değişebilecek veya çalışmayı durdurabilecek belgelenmemiş sağlayıcı uç noktalarına bağımlıdır.
+- Claude'un en son oturum içgörüsü yalnızca en son gözlemlenen CLI oturumunu yansıtır, oturumlar arasında hesap genelinde bir toplamı değil.
+- GitHub Copilot organizasyon tarafından yönetilen hesaplarda kişisel bir ödenek hiç görünmeyebilir; faturalama da bireysel Copilot isteklerinin gerisinde kalabilir ve Dashboard ikisini de tahmin etmek yerine açıkça belirtir.
+- Grok Free hesapları, billing capability'sinden hiç sayısal bir kullanım yüzdesi almayabilir.
 - Gelecekte yalnızca geliştirme amaçlı araçlarda (`vitest`/`vite` zinciri) bazı `npm audit` bulguları görünebilir; üretim bağımlılıkları sıfırdır ve sıfır kalacaktır.
 - Claude status-line wrapper'ı için Windows birincil geliştirme ve test hedefidir; macOS/Linux zincirleme tam eşlik yerine açık bir en iyi çaba yedeğine sahiptir.
+- Marketplace ekran görüntüleri henüz üretilmedi — bkz. [Ekran görüntüleri](#ekran-görüntüleri).
 
 ## Yol haritası
 
 Aşağıdaki öğeler **planlanmıştır, taahhüt edilmemiştir** ve değişebilir:
 
 - Task 12 PR'ı incelendikten sonra ek branch koruması/ruleset yapılandırması.
-- GitHub Release tabanlı bir kurulum yolu ile bir Visual Studio Code Marketplace publisher'ı ve listesi.
+- Task 13 preflight kontrol listesi (`docs/MARKETPLACE-PREFLIGHT.md`) tamamlandıktan ve ekran
+  görüntüleri üretildikten sonra, GitHub Release tabanlı bir kurulum yolu ile bir Visual Studio
+  Code Marketplace yayını.
 - Gelecekte ek sağlayıcı desteği değerlendirilebilir; şu anda Codex, Claude Code, GitHub Copilot ve Grok'un ötesinde hiçbir şey planlanmamış veya uygulanmamıştır.
+
+## Bağlantısızlık bildirimi
+
+AI Limit Ledger bağımsız bir projedir; Microsoft, GitHub, OpenAI, Anthropic veya xAI ile bağlantılı
+değildir, bu kuruluşlar tarafından desteklenmemektedir veya sponsor olunmamaktadır. Sağlayıcı adları
+yalnızca birlikte çalışabilirliği tanımlamak için kullanılır ve hiçbir sağlayıcı logosu veya ticari
+markası ile birlikte ya da onun yerine kullanılmaz.
+
+## English
+
+Bu belgenin İngilizce sürümü için bkz. [README.md](README.md).
 
 ## Lisans
 

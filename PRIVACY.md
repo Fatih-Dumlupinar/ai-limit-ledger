@@ -1,5 +1,14 @@
 # AI Limit Ledger Privacy
 
+## Marketplace listing preparation (Task 13)
+
+No change to what data the extension reads, stores, or transmits. This task changes only the
+`publisher` identity in `package.json` and adds Marketplace listing/documentation content.
+Marketplace screenshots, when produced (see `docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md`), use only
+synthetic or disposable-account data captured through the real extension UI — never a real primary
+account's credentials, tokens, quota values, or personal file paths. No new setting, telemetry, or
+data collection was added to support screenshot capture.
+
 ## Release hardening (0.6.1)
 
 No change to what data the extension reads, stores, or transmits. This release is a source/release-process audit: local temp-file naming in `SharedSnapshotStore` was hardened against a same-process filename collision (no user data was ever at risk — the collision only affected which of two identical writes' temp file survived to be renamed), and the packaged VSIX now excludes compiled source maps and local audit scratch files that were never user data but added unnecessary package weight. See `docs/SECURITY-AUDIT-0.6.1.md` for the full audit.
