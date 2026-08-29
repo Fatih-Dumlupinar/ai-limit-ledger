@@ -2,7 +2,7 @@
   "name": "ai-limit-ledger",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "publisher": "fatihdumlupinar-dev",
   "private": true,
   "preview": true,

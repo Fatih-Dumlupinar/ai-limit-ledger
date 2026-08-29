@@ -29,6 +29,11 @@ describe('Task 13: VSIX denylist covers new Marketplace-prep paths', () => {
     'extension/docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md',
     'extension/.claude/scheduled_tasks.lock', // Task 13.1: found actually leaking into a real VSIX
     'extension/.claude/settings.local.json',
+    'extension/docs/RELEASE-PROCESS.md',
+    'extension/docs/FIRST-MARKETPLACE-RELEASE-0.7.0.md',
+    'extension/docs/INSTALLATION-MIGRATION-0.7.0.md',
+    'extension/docs/ROLLBACK.md',
+    'extension/docs/RELEASE-NOTES-0.7.0.md',
   ])('flags %s as denylisted', (name) => {
     expect(denied(name)).toBe(true);
   });
@@ -103,6 +108,18 @@ describe('Task 13: .vscodeignore excludes Marketplace-prep-only content from the
 
   it('excludes the Marketplace screenshot directory', () => {
     expect(vscodeignore).toMatch(/assets\/marketplace\/\*\*/);
+  });
+
+  it('excludes the Task 14 release-process documentation files', () => {
+    for (const doc of [
+      'docs/RELEASE-PROCESS.md',
+      'docs/FIRST-MARKETPLACE-RELEASE-*.md',
+      'docs/INSTALLATION-MIGRATION-*.md',
+      'docs/ROLLBACK.md',
+      'docs/RELEASE-NOTES-*.md',
+    ]) {
+      expect(vscodeignore).toContain(doc);
+    }
   });
 
   it('still excludes test/, scripts/, and .github/ (pre-existing Task 10/12 policy, unchanged)', () => {

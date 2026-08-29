@@ -1,9 +1,10 @@
 # Marketplace publish preflight checklist
 
-Manual checklist to run **before any real Marketplace publish**. Task 13 prepares every item below
-that can be prepared without authenticating to the Marketplace or running `vsce publish`; it does
-not execute the checklist end-to-end because publishing itself is out of scope (see "Deferred to
-Task 14" at the bottom).
+Manual checklist to run **before any real Marketplace publish**. Task 13 prepared every item below
+that could be prepared without authenticating to the Marketplace or running `vsce publish`. Task 14
+adds the release-candidate/finalize workflows this checklist plugs into (see "How this checklist is
+executed" at the bottom) — the manual Marketplace upload itself is still a human action, not
+something either workflow performs.
 
 Check every box against the actual state of the branch/tag being published, not from memory.
 
@@ -106,35 +107,46 @@ missing screenshot must never block or delay a release.
 ## Installation migration
 
 - [ ] Confirmed that a controlled local-to-Marketplace installation migration procedure exists and
-      is documented (see "Installation status" section of the README and
-      `PUBLISHING.md`'s identity-change note) — the actual migration itself is **deferred to
-      Task 14**, not performed here.
+      is documented (`docs/INSTALLATION-MIGRATION-0.7.0.md`, the "Installation status" section of
+      the README, and `PUBLISHING.md`'s identity-change note) — the actual migration itself is a
+      manual, user-driven action taken after the Marketplace version is live, not performed by
+      this checklist or either release workflow.
 
 ## Authentication
 
-- [ ] Deferred to Task 14 — Marketplace authentication (PAT or Microsoft Entra workload identity /
-      GitHub OIDC) is intentionally not set up, requested, or stored as part of Task 13.
+- [ ] No Marketplace PAT, `VSCE_PAT`, or other publishing credential exists anywhere in this
+      repository, its Actions secrets, or its workflows (Task 14 deliberately does not create one).
+      The Marketplace upload in this checklist is always the manual VSIX upload path.
 
 ## Release approval
 
 - [ ] A human with publisher-portal access has reviewed this checklist and explicitly approved
-      the specific commit/tag to publish.
+      the specific commit/candidate to publish.
+- [ ] The `production-release` GitHub Environment has at least one required reviewer configured
+      (repository owner action, not created by either release workflow).
 
 ## Rollback readiness
 
-- [ ] A rollback/unpublish procedure is documented before the first real publish (deferred to
-      Task 14 — Marketplace supports unlisting/deprecating a version, not deleting Marketplace
-      history; know this before publishing).
+- [ ] `docs/ROLLBACK.md` has been read for the specific failure mode before taking any corrective
+      action — Marketplace supports unlisting/deprecating a version, not deleting Marketplace
+      history or re-using a version number.
 
 ---
 
-## Deferred to Task 14 (explicitly out of scope here)
+## How this checklist is executed (Task 14 and later)
 
-- Marketplace authentication (PAT creation, Microsoft Entra workload identity, GitHub OIDC)
-- Manual-approval release environment / release workflow
-- Version bump / git tag workflow
-- GitHub Release creation
-- `vsce publish` / Marketplace upload
-- The first real publish
-- Controlled local-extension-identity-to-Marketplace-identity installation migration
-- Rollback / unpublish procedure execution
+See `docs/RELEASE-PROCESS.md` for the full procedure. In summary:
+
+- `.github/workflows/release-candidate.yml` (`workflow_dispatch` only) builds, tests, audits, and
+  packages the exact `main` commit and uploads a candidate artifact with its SHA-256, an SBOM, and
+  a release manifest. It never tags, releases, or publishes.
+- The Marketplace upload itself is always manual — this checklist, `docs/RELEASE-PROCESS.md`, and
+  `docs/FIRST-MARKETPLACE-RELEASE-0.7.0.md` are what a human works through to do it.
+- `.github/workflows/finalize-release.yml` (`workflow_dispatch` only, gated behind the
+  `production-release` environment and a strict input allowlist) re-verifies the candidate against
+  the confirmed commit/hash and only then creates the git tag and GitHub Release.
+- `docs/INSTALLATION-MIGRATION-0.7.0.md` covers the local-identity-to-Marketplace-identity
+  installation migration; it remains a manual, user-driven action, not something either workflow
+  performs.
+- `docs/ROLLBACK.md` covers every rollback/failure scenario; neither workflow force-moves a tag,
+  overwrites a release asset, or unpublishes a Marketplace version.

@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+## 0.7.0
+
+- **Task 14 — Secure release system and first Marketplace release preparation.** First Marketplace
+  version. No provider/runtime behavior change; this task adds a manual-approval release pipeline
+  and finalizes the listing prepared in Task 13/13.1.
+  - Multi-provider usage monitoring for Codex, Claude Code, GitHub Copilot, and Grok, presented
+    through a Rich (Webview) or Safe Native dashboard with live EN/TR localization and
+    privacy-first, provider-scoped usage insights. Claude session metrics reflect the most recently
+    observed CLI session, not an account-wide total; GitHub Copilot allowance may be unavailable on
+    an organization-managed account; Grok Free accounts may not expose a numeric usage percentage;
+    experimental provider endpoints may change without notice; and the extension never makes a
+    model/inference call to read usage — only documented account/usage endpoints or local files.
+    Units are never combined across providers.
+  - Added `.github/workflows/release-candidate.yml`: a `workflow_dispatch`-only, read-only-permissions
+    workflow that rebuilds and audits the exact `main` commit, packages the VSIX, generates a
+    SHA-256 checksum, a CycloneDX-shaped SBOM (`scripts/generate-sbom.mjs`), a release manifest
+    (`scripts/generate-release-manifest.mjs`), and (on this public repository) a build-provenance
+    attestation, then uploads a short-retention candidate artifact. It never tags, releases, or
+    publishes anything.
+  - Added `.github/workflows/finalize-release.yml`: a `workflow_dispatch`-only workflow gated behind
+    the `production-release` GitHub Environment (manual approval, configured by the repository
+    owner — not created by this task) and a strict input allowlist, including an exact Marketplace
+    URL and a literal `I_HAVE_VERIFIED_MARKETPLACE_0.7.0` confirmation phrase. It re-verifies the
+    candidate artifact's hash and identity, confirms the candidate commit is part of `main`'s
+    history, then creates an immutable `v0.7.0` tag and a preview GitHub Release — idempotently, and
+    without force-moving a tag or overwriting an existing release asset. It never uploads to the
+    Marketplace and never runs `vsce publish`.
+  - Neither workflow creates, stores, or references a Marketplace PAT, `VSCE_PAT`, or any other
+    publishing credential — the first Marketplace upload is a manual VSIX upload performed by the
+    project owner, exactly as documented in `docs/RELEASE-PROCESS.md`.
+  - Extended `scripts/verify-workflows.mjs` for both new workflows: exclusive `workflow_dispatch`
+    trigger, per-job write-permission allowlists (previously only checked at the workflow level),
+    a 14–30 day retention band for the release-candidate artifact (versus 1–7 days elsewhere),
+    `fetch-depth: 0` allowed only for the secret scanner and the finalize workflow's ancestry check,
+    and a narrowed publish/release-operation ban so only `finalize-release.yml` may reference
+    `gh release` or the Marketplace listing URL (`vsce publish`/`npm publish` remain forbidden
+    everywhere, with no exception).
+  - Added `docs/RELEASE-PROCESS.md`, `docs/FIRST-MARKETPLACE-RELEASE-0.7.0.md`,
+    `docs/INSTALLATION-MIGRATION-0.7.0.md`, `docs/ROLLBACK.md`, and `docs/RELEASE-NOTES-0.7.0.md`;
+    updated `PUBLISHING.md`, `docs/MARKETPLACE-PREFLIGHT.md`, `docs/MARKETPLACE-LISTING.md`, and
+    `SECURITY.md` for the 0.7.0 identity/version and the new release system.
+  - Confirms the Task 13.1 decision that Marketplace screenshots remain optional and are not a
+    release blocker, and that the manifest keeps `"preview": true` for this first release (the
+    Standard Marketplace channel is used; `vsce --pre-release` is not).
 - **Task 13.1 — Marketplace screenshots are optional.** Documentation-only change; no runtime,
   version, or publish-state change. Confirmed against the current official VS Code
   publishing/extension-manifest documentation that screenshots have no manifest field and are not
