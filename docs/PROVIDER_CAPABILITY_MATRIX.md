@@ -1,0 +1,22 @@
+# Provider Capability Matrix
+
+AI Limit Ledger keeps the primary quota surface stable and renders additional metrics only when a provider exposes an allowlisted, finite value. A missing denominator never becomes a percentage or progress bar.
+
+| Provider       | Primary source                                                                             | Account insights                                                                                  | Session insights                                                                                                                     | Trend / scope                                                                           | Experimental boundary                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Codex          | Official local App Server: `account/read`, `account/rateLimits/read`, `account/usage/read` | Plan, rate-limit windows, lifetime/peak/streak usage, reset credits and observed expiration dates | Not exposed by this source                                                                                                           | Up to 30 normalized daily rows; UI defaults to latest 14; no cross-provider aggregation | None for the official methods                                                            |
+| Claude Code    | Official status-line payload and local wrapper snapshot                                    | Separate 5-hour / 7-day account limits                                                            | Latest observed CLI session: model, context, input/output/cache, estimated cost, durations, lines, fast/effort/thinking/output style | Session values are not lifetime/account totals                                          | OAuth account limits are experimental and never replace official session metrics         |
+| GitHub Copilot | Official GitHub Billing REST API                                                           | AI credits, model/product labels, reset time, user-configured allowance provenance                | Not exposed by this source                                                                                                           | AI credits stay separate from legacy premium/chat/completions quotas                    | Undocumented entitlement fallback is opt-in; organization ownership is not a denominator |
+| Grok           | Official Grok Build ACP `x.ai/billing` first                                               | Plan, current-period window, build/extra credits, product breakdown only when exposed             | Not exposed by this source                                                                                                           | Product categories are never summed into a different quota                              | CLI-proxy fallback is opt-in experimental; missing breakdown is not an empty array       |
+
+## Rendering rules
+
+- `summary` renders the first 3–5 safe insights, `detailed` makes the remaining allowlisted fields available in an expandable section, and `hidden` suppresses insights only.
+- Rich and Safe Native Dashboards use the same typed snapshot data and localized semantic labels. Source kind and source label remain visible for provenance.
+- The status bar keeps the provider’s primary quota focused. Compact mode is unchanged; detailed mode adds no more than three insight lines.
+- Values are not summed across providers, plans, windows, products, account scopes, or session/account units. Negative, non-finite, malformed, or unavailable fields are omitted.
+- Dates are display-only. Reset-credit expiration dates do not trigger actions or refreshes.
+
+## Privacy boundary
+
+Provider parsers immediately discard unknown fields. No raw provider payload, credential, token, email, account identifier, repository path, prompt, transcript, or command is stored in the typed insights model, logs, diagnostics, or the packaged extension.

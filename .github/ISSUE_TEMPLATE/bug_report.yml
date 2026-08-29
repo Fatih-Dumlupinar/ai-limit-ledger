@@ -1,0 +1,136 @@
+name: Bug report
+description: Report a problem with AI Limit Ledger
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        **Do not include any of the following in this report or in screenshots:**
+        tokens, PATs, credentials, Authorization headers, cookies, your account email,
+        raw provider API responses, prompt/transcript content, or your full workspace
+        or repository filesystem path. Redact or crop screenshots before attaching them.
+        If this is a **security vulnerability**, stop and use private reporting instead —
+        see [SECURITY.md](../../SECURITY.md); do not file it as a public issue.
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: AI Limit Ledger version
+      placeholder: e.g. 0.6.2
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version
+      placeholder: Help > About
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Codex
+        - Claude Code
+        - GitHub Copilot
+        - Grok
+        - Not provider-specific
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dashboard-mode
+    attributes:
+      label: Dashboard mode
+      options:
+        - Rich (Webview)
+        - Safe Native
+        - Not applicable / status bar only
+    validations:
+      required: false
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Display language
+      options:
+        - auto
+        - en
+        - tr
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Safe diagnostics
+      description: >
+        Paste the output of **AI Limit Ledger: Copy Redacted Diagnostics** (and/or
+        **Copy Redacted Effective Settings**) here. These commands strip tokens,
+        credentials, account identifiers, and absolute paths before copying.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: stale-cache
+    attributes:
+      label: Does this look related to a stale/cached value?
+      options:
+        - 'No'
+        - 'Yes'
+        - 'Not sure'
+    validations:
+      required: false
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Is this a regression (did it work in an earlier version)?
+      options:
+        - 'No / first time trying this'
+        - 'Yes — worked in an earlier version'
+        - 'Not sure'
+    validations:
+      required: false

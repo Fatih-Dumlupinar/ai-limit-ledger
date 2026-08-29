@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build output (generated from src/ at build/CI time — see Task 12)
+out/
+dist/
+
+# Test / coverage
+coverage/
+.vitest/
+.nyc_output/
+
+# Caches / scratch
+.cache/
+.tmp/
+*.tmp
+
+# Logs
+*.log
+debug.log
+npm-debug.log*
+
+# Environment / credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# Packaged extension artifacts (built from source; not committed)
+*.vsix
+
+# Local audit / dependency-tree scratch output
+*-audit.json
+*-tree.json
+audit-raw.json
+deps-tree.json
+
+# Provider-specific local snapshots/caches (never committed; user-machine state)
+.claude-usage-cache/
+
+# OS / editor local files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Editor-local settings (project-shared .vscode/launch.json stays tracked)
+.vscode/*
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Backup files
+*.bak
+*.orig

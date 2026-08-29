@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Fatih-Dumlupinar/ai-limit-ledger/security/advisories/new
+    about: >
+      Do not open a public issue for a security vulnerability. Use GitHub's private
+      vulnerability reporting instead. See SECURITY.md for details.

@@ -1,0 +1,734 @@
+{
+  "name": "ai-limit-ledger",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.6.2",
+  "publisher": "local",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fatih-Dumlupinar/ai-limit-ledger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fatih-Dumlupinar/ai-limit-ledger/issues"
+  },
+  "homepage": "https://github.com/Fatih-Dumlupinar/ai-limit-ledger#readme",
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=22.12.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "codex",
+    "usage",
+    "rate limit",
+    "status bar",
+    "chatgpt",
+    "quota",
+    "developer tools"
+  ],
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#1e1b4b",
+    "theme": "dark"
+  },
+  "main": "./out/extension.js",
+  "extensionKind": [
+    "ui"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiLimitLedger.refresh",
+        "title": "%command.refresh%"
+      },
+      {
+        "command": "aiLimitLedger.refreshCodex",
+        "title": "%command.refreshCodex%"
+      },
+      {
+        "command": "aiLimitLedger.refreshClaude",
+        "title": "%command.refreshClaude%"
+      },
+      {
+        "command": "aiLimitLedger.openDashboard",
+        "title": "%command.openDashboard%"
+      },
+      {
+        "command": "aiLimitLedger.openSafeDashboard",
+        "title": "%command.openSafeDashboard%"
+      },
+      {
+        "command": "aiLimitLedger.openRichDashboard",
+        "title": "%command.openRichDashboard%"
+      },
+      {
+        "command": "aiLimitLedger.selectDashboardMode",
+        "title": "%command.selectDashboardMode%"
+      },
+      {
+        "command": "aiLimitLedger.selectStatusBarMode",
+        "title": "%command.selectStatusBarMode%"
+      },
+      {
+        "command": "aiLimitLedger.selectPercentageDisplay",
+        "title": "%command.selectPercentageDisplay%"
+      },
+      {
+        "command": "aiLimitLedger.selectDisplayLanguage",
+        "title": "%command.selectDisplayLanguage%"
+      },
+      {
+        "command": "aiLimitLedger.resetDisplaySettings",
+        "title": "%command.resetDisplaySettings%"
+      },
+      {
+        "command": "aiLimitLedger.recoverDashboard",
+        "title": "%command.recoverDashboard%"
+      },
+      {
+        "command": "aiLimitLedger.enableClaudeCode",
+        "title": "%command.enableClaudeCode%"
+      },
+      {
+        "command": "aiLimitLedger.disableClaudeCode",
+        "title": "%command.disableClaudeCode%"
+      },
+      {
+        "command": "aiLimitLedger.enableClaudeOAuthUsage",
+        "title": "%command.enableClaudeOAuthUsage%"
+      },
+      {
+        "command": "aiLimitLedger.disableClaudeOAuthUsage",
+        "title": "%command.disableClaudeOAuthUsage%"
+      },
+      {
+        "command": "aiLimitLedger.openExperimentalClaudeUsageDocs",
+        "title": "%command.openExperimentalClaudeUsageDocs%"
+      },
+      {
+        "command": "aiLimitLedger.connectCopilotUsage",
+        "title": "%command.connectCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.disconnectCopilotUsage",
+        "title": "%command.disconnectCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.refreshCopilotUsage",
+        "title": "%command.refreshCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.configureCopilotPlan",
+        "title": "%command.configureCopilotPlan%"
+      },
+      {
+        "command": "aiLimitLedger.diagnoseCopilotIntegration",
+        "title": "%command.diagnoseCopilotIntegration%"
+      },
+      {
+        "command": "aiLimitLedger.openCopilotUsage",
+        "title": "%command.openCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.enableExperimentalCopilotUsage",
+        "title": "%command.enableExperimentalCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.disableExperimentalCopilotUsage",
+        "title": "%command.disableExperimentalCopilotUsage%"
+      },
+      {
+        "command": "aiLimitLedger.enableGrokUsage",
+        "title": "%command.enableGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.disableGrokUsage",
+        "title": "%command.disableGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.refreshGrokUsage",
+        "title": "%command.refreshGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.recheckGrokInstallation",
+        "title": "%command.recheckGrokInstallation%"
+      },
+      {
+        "command": "aiLimitLedger.launchGrokLogin",
+        "title": "%command.launchGrokLogin%"
+      },
+      {
+        "command": "aiLimitLedger.diagnoseGrokIntegration",
+        "title": "%command.diagnoseGrokIntegration%"
+      },
+      {
+        "command": "aiLimitLedger.openGrokInstallGuide",
+        "title": "%command.openGrokInstallGuide%"
+      },
+      {
+        "command": "aiLimitLedger.openGrokUsage",
+        "title": "%command.openGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.enableExperimentalGrokUsage",
+        "title": "%command.enableExperimentalGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.disableExperimentalGrokUsage",
+        "title": "%command.disableExperimentalGrokUsage%"
+      },
+      {
+        "command": "aiLimitLedger.repairClaudeCodeIntegration",
+        "title": "%command.repairClaudeCodeIntegration%"
+      },
+      {
+        "command": "aiLimitLedger.enableClaudeAutomaticRepair",
+        "title": "%command.enableClaudeAutomaticRepair%"
+      },
+      {
+        "command": "aiLimitLedger.disableClaudeAutomaticRepair",
+        "title": "%command.disableClaudeAutomaticRepair%"
+      },
+      {
+        "command": "aiLimitLedger.recheckClaudeIntegrationHealth",
+        "title": "%command.recheckClaudeIntegrationHealth%"
+      },
+      {
+        "command": "aiLimitLedger.diagnoseClaudeCodeIntegration",
+        "title": "%command.diagnoseClaudeCodeIntegration%"
+      },
+      {
+        "command": "aiLimitLedger.diagnoseCodexIntegration",
+        "title": "%command.diagnoseCodexIntegration%"
+      },
+      {
+        "command": "aiLimitLedger.openCodexUsagePage",
+        "title": "%command.openCodexUsagePage%"
+      },
+      {
+        "command": "aiLimitLedger.openClaudeUsagePage",
+        "title": "%command.openClaudeUsagePage%"
+      },
+      {
+        "command": "aiLimitLedger.openClaudeInstallGuide",
+        "title": "%command.openClaudeInstallGuide%"
+      },
+      {
+        "command": "aiLimitLedger.launchClaudeInTerminal",
+        "title": "%command.launchClaudeInTerminal%"
+      },
+      {
+        "command": "aiLimitLedger.copyClaudeDiagnostics",
+        "title": "%command.copyClaudeDiagnostics%"
+      },
+      {
+        "command": "aiLimitLedger.openClaudeCode",
+        "title": "%command.openClaudeCode%"
+      },
+      {
+        "command": "aiLimitLedger.copyClaudeUsageCommand",
+        "title": "%command.copyClaudeUsageCommand%"
+      },
+      {
+        "command": "aiLimitLedger.openCliEnhancedModeDocs",
+        "title": "%command.openCliEnhancedModeDocs%"
+      },
+      {
+        "command": "aiLimitLedger.selectProviders",
+        "title": "%command.selectProviders%"
+      },
+      {
+        "command": "aiLimitLedger.restartAppServer",
+        "title": "%command.restartAppServer%"
+      },
+      {
+        "command": "aiLimitLedger.openSettings",
+        "title": "%command.openSettings%"
+      },
+      {
+        "command": "aiLimitLedger.showLogs",
+        "title": "%command.showLogs%"
+      },
+      {
+        "command": "aiLimitLedger.copyRedactedDiagnostics",
+        "title": "%command.copyRedactedDiagnostics%"
+      },
+      {
+        "command": "aiLimitLedger.copyRedactedEffectiveSettings",
+        "title": "%command.copyRedactedEffectiveSettings%"
+      },
+      {
+        "command": "aiLimitLedger.exportRedactedSupportBundle",
+        "title": "%command.exportRedactedSupportBundle%"
+      },
+      {
+        "command": "aiLimitLedger.clearCachedUsage",
+        "title": "%command.clearCachedUsage%"
+      }
+    ],
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "aiLimitLedger.codexExecutablePath": {
+          "type": "string",
+          "default": "auto",
+          "scope": "machine",
+          "description": "%config.codexExecutablePath%"
+        },
+        "aiLimitLedger.providers": {
+          "type": "array",
+          "default": [
+            "codex",
+            "claude",
+            "copilot",
+            "grok"
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude",
+              "copilot",
+              "grok"
+            ]
+          },
+          "uniqueItems": true,
+          "scope": "window",
+          "description": "%config.providers%"
+        },
+        "aiLimitLedger.dashboard.providerVisibility": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "active-only",
+            "all-supported"
+          ],
+          "default": "auto",
+          "scope": "window",
+          "description": "%config.providerVisibility%",
+          "enumDescriptions": [
+            "%config.providerVisibility.auto%",
+            "%config.providerVisibility.activeOnly%",
+            "%config.providerVisibility.allSupported%"
+          ]
+        },
+        "aiLimitLedger.dashboard.providerOrder": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude",
+              "copilot",
+              "grok"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "codex",
+            "claude",
+            "copilot",
+            "grok"
+          ],
+          "scope": "window",
+          "description": "%config.providerOrder%"
+        },
+        "aiLimitLedger.dashboard.openOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "%config.openOnStartup%"
+        },
+        "aiLimitLedger.dashboard.showAvailableIntegrations": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%config.showAvailableIntegrations%"
+        },
+        "aiLimitLedger.dashboard.insightsMode": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "detailed",
+            "hidden"
+          ],
+          "default": "summary",
+          "scope": "window",
+          "description": "%config.insightsMode%",
+          "enumDescriptions": [
+            "%config.insightsMode.summary%",
+            "%config.insightsMode.detailed%",
+            "%config.insightsMode.hidden%"
+          ]
+        },
+        "aiLimitLedger.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 1800,
+          "maximum": 3600,
+          "scope": "window",
+          "description": "%config.legacyRefreshInterval%"
+        },
+        "aiLimitLedger.dashboard.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "rich-webview",
+            "safe-native"
+          ],
+          "default": "auto",
+          "scope": "machine",
+          "description": "%config.dashboardMode%"
+        },
+        "aiLimitLedger.refresh.codexFallbackSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 30,
+          "maximum": 900,
+          "scope": "machine",
+          "description": "%config.codexFallback%"
+        },
+        "aiLimitLedger.refresh.claudeStatusLineSeconds": {
+          "type": "number",
+          "default": 15,
+          "minimum": 5,
+          "maximum": 300,
+          "scope": "machine",
+          "description": "%config.claudeStatusLine%"
+        },
+        "aiLimitLedger.claude.autoRepair": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "%config.claudeAutoRepair%"
+        },
+        "aiLimitLedger.refresh.manualCooldownSeconds": {
+          "type": "number",
+          "default": 10,
+          "minimum": 5,
+          "maximum": 60,
+          "scope": "machine",
+          "description": "%config.manualCooldown%"
+        },
+        "aiLimitLedger.showWeeklyLimit": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.compactStatusBar": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.presentationMode": {
+          "type": "string",
+          "default": "remaining",
+          "enum": [
+            "remaining",
+            "used",
+            "compact"
+          ],
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.warningUsedPercent": {
+          "type": "number",
+          "default": 70,
+          "minimum": 1,
+          "maximum": 99,
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.criticalUsedPercent": {
+          "type": "number",
+          "default": 90,
+          "minimum": 2,
+          "maximum": 100,
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.showErrorNotifications": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "%config.legacy%"
+        },
+        "aiLimitLedger.claude.experimentalOAuthUsage.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "%config.claudeOAuthEnabled%"
+        },
+        "aiLimitLedger.claude.experimentalOAuthUsage.refreshSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 120,
+          "maximum": 3600,
+          "scope": "machine",
+          "description": "%config.claudeOAuthRefreshSeconds%"
+        },
+        "aiLimitLedger.copilot.plan": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "pro",
+            "proPlus",
+            "max",
+            "custom"
+          ],
+          "scope": "machine",
+          "description": "%config.copilotPlan%"
+        },
+        "aiLimitLedger.copilot.customMonthlyCredits": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "scope": "machine",
+          "description": "%config.copilotCredits%"
+        },
+        "aiLimitLedger.copilot.refreshSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 300,
+          "maximum": 3600,
+          "scope": "machine",
+          "description": "%config.copilotRefresh%"
+        },
+        "aiLimitLedger.copilot.executablePath": {
+          "type": "string",
+          "default": "auto",
+          "scope": "machine",
+          "description": "%config.copilotExecutablePath%"
+        },
+        "aiLimitLedger.copilot.experimentalEntitlementUsage.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "%config.copilotExperimental%"
+        },
+        "aiLimitLedger.grok.executablePath": {
+          "type": "string",
+          "default": "auto",
+          "scope": "machine",
+          "description": "%config.grokExecutablePath%"
+        },
+        "aiLimitLedger.grok.refreshSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 300,
+          "maximum": 3600,
+          "scope": "machine",
+          "description": "%config.grokRefresh%"
+        },
+        "aiLimitLedger.grok.experimentalCliProxyUsage.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "%config.grokExperimental%"
+        },
+        "aiLimitLedger.statusBar.mode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "detailed",
+            "hidden"
+          ],
+          "default": "compact",
+          "scope": "window",
+          "description": "%config.statusBarMode%",
+          "enumDescriptions": [
+            "%config.statusBarMode.compact%",
+            "%config.statusBarMode.detailed%",
+            "%config.statusBarMode.hidden%"
+          ]
+        },
+        "aiLimitLedger.statusBar.providerOrder": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude",
+              "copilot",
+              "grok"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "codex",
+            "claude",
+            "copilot",
+            "grok"
+          ],
+          "scope": "window",
+          "description": "%config.statusBarProviderOrder%"
+        },
+        "aiLimitLedger.display.percentageMode": {
+          "type": "string",
+          "enum": [
+            "remaining",
+            "used",
+            "both"
+          ],
+          "default": "remaining",
+          "scope": "window",
+          "description": "%config.percentageMode%",
+          "enumDescriptions": [
+            "%config.percentageMode.remaining%",
+            "%config.percentageMode.used%",
+            "%config.percentageMode.both%"
+          ]
+        },
+        "aiLimitLedger.display.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "tr"
+          ],
+          "default": "auto",
+          "scope": "window",
+          "description": "%config.language%",
+          "enumDescriptions": [
+            "%config.language.auto%",
+            "%config.language.en%",
+            "%config.language.tr%"
+          ]
+        },
+        "aiLimitLedger.display.timeFormat": {
+          "type": "string",
+          "enum": [
+            "locale",
+            "relative",
+            "absolute",
+            "both"
+          ],
+          "default": "both",
+          "scope": "window",
+          "description": "%config.timeFormat%",
+          "enumDescriptions": [
+            "%config.timeFormat.locale%",
+            "%config.timeFormat.relative%",
+            "%config.timeFormat.absolute%",
+            "%config.timeFormat.both%"
+          ]
+        },
+        "aiLimitLedger.tooltip.density": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "detailed"
+          ],
+          "default": "detailed",
+          "scope": "window",
+          "description": "%config.tooltipDensity%",
+          "enumDescriptions": [
+            "%config.tooltipDensity.compact%",
+            "%config.tooltipDensity.detailed%"
+          ]
+        },
+        "aiLimitLedger.thresholds.warningRemainingPercent": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 99,
+          "scope": "window",
+          "description": "%config.warningThreshold%"
+        },
+        "aiLimitLedger.thresholds.criticalRemainingPercent": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 98,
+          "scope": "window",
+          "description": "%config.criticalThreshold%"
+        },
+        "aiLimitLedger.notifications.level": {
+          "type": "string",
+          "enum": [
+            "off",
+            "errors",
+            "warnings-and-errors"
+          ],
+          "default": "errors",
+          "scope": "window",
+          "description": "%config.notificationLevel%",
+          "enumDescriptions": [
+            "%config.notificationLevel.off%",
+            "%config.notificationLevel.errors%",
+            "%config.notificationLevel.warnings%"
+          ]
+        },
+        "aiLimitLedger.notifications.showRecoveryActions": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%config.recoveryActions%"
+        },
+        "aiLimitLedger.logging.level": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "scope": "window",
+          "description": "%config.loggingLevel%",
+          "enumDescriptions": [
+            "%config.loggingLevel.error%",
+            "%config.loggingLevel.warn%",
+            "%config.loggingLevel.info%",
+            "%config.loggingLevel.debug%"
+          ]
+        },
+        "aiLimitLedger.cache.maxAgeHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "maximum": 168,
+          "scope": "window",
+          "description": "%config.cacheMaxAge%"
+        },
+        "aiLimitLedger.cache.showExpiredInDashboard": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "%config.cacheExpired%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "lint": "eslint src test --ext .ts",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "audit:release": "node scripts/release-audit.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.95.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}

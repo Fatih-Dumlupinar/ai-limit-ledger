@@ -1,0 +1,78 @@
+name: Feature request
+description: Suggest an idea or enhancement for AI Limit Ledger
+labels: ['enhancement', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. This project is privacy-first and dependency-minimal
+        by design — please read [CONTRIBUTING.md](../../CONTRIBUTING.md)'s "Provider
+        provenance rules" and "Privacy and logging boundaries" sections before proposing
+        a feature that reads new provider data or adds network access.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this solve? What's missing or awkward today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Codex
+        - Claude Code
+        - GitHub Copilot
+        - Grok
+        - Not provider-specific / general
+        - A provider not currently supported
+    validations:
+      required: false
+
+  - type: textarea
+    id: privacy-impact
+    attributes:
+      label: Privacy impact
+      description: >
+        Does this read any new data (credentials, tokens, prompts, transcripts, account
+        identifiers, filesystem paths)? Would it need to be labeled official, experimental,
+        or calculated?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: network
+    attributes:
+      label: Does this require new network access?
+      options:
+        - 'No'
+        - 'Yes — an official, documented provider endpoint'
+        - 'Yes — an undocumented/reverse-engineered endpoint'
+        - 'Not sure'
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: How would you actually use this day to day?
+    validations:
+      required: false
