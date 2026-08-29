@@ -1,0 +1,10 @@
+title = "AI Limit Ledger Gitleaks policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Historical synthetic AWS fixture retained only for release-audit pattern tests"
+paths = ['''^test/ReleaseAudit\.test\.ts$''']
+regexTarget = "match"
+regexes = ['''AK(?:IA)ABCDEFGHIJKLMNOP''']

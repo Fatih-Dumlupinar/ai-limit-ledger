@@ -2,6 +2,9 @@
 
 _[English](README.md)_
 
+[![CI](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml)
+
 AI Limit Ledger; Codex, Claude Code, GitHub Copilot ve Grok için AI kodlama kullanım limitlerini, kotaları, sıfırlanma pencerelerini ve sağlayıcı etkinliğini izlemeye yönelik, gizliliği önceleyen bir VS Code eklentisidir. Copilot, yalnızca GitHub kimlik doğrulamasından sonra veya açıkça sağlanan Plan-read ince taneli bir PAT ile resmi GitHub Billing REST API'sini kullanır. Grok kullanımı açıkça etkinleştirilene kadar kapalıdır; deneysel `x.ai/billing` capability'sini kullanan resmî Grok Build ACP aktarımını kullanır ve CLI-proxy yedeği de deneysel ve isteğe bağlıdır.
 
 AI Limit Ledger bağımsız bir topluluk projesidir; OpenAI, Anthropic, GitHub veya xAI ile bağlantılı değildir ve bu kuruluşlar tarafından desteklenmemektedir.
@@ -28,6 +31,21 @@ Varsayılan **Rich Dashboard**, sıfırlanma zamanları, plan, CLI/App Server du
 ## Veri ve gizlilik
 
 Codex yalnızca yerel ve salt okunur kalır. Copilot, VS Code'un GitHub Authentication API'sinden gelen bir oturum veya yalnızca VS Code SecretStorage'da saklanan, kullanıcı tarafından girilen bir Plan-read PAT ile `GET /user` ve resmî kullanıcı AI-kredi faturalama uç noktasını çağırır; token'lar asla loglanmaz veya global/workspace state'e yazılmaz ve hiçbir repository/admin/write izni istenmez. Grok, yalnızca sağlayıcısı açıkça etkinleştirildikten sonra `grok agent stdio`'yu başlatır; AI Limit Ledger Grok kimlik doğrulama dosyalarını, prompt/transcript/kod verisini okumaz veya `grok login`'i otomatik olarak çalıştırmaz. Telemetri yoktur.
+
+## CI ve repository güvenliği
+
+Task 12 dört salt-okunur repository kontrolü ekler: `CI`, Ubuntu ve Windows üzerinde derleme,
+lint, biçim, audit, test ve VSIX paketleme yapar; `CodeQL`, JavaScript/TypeScript kodunu pull
+request'lerde, `main` push'larında ve varsayılan branch üzerinde haftalık tarar; `Secret Scan`,
+resmî Gitleaks CLI release'ini SHA-256 ile doğruladıktan sonra tam Git geçmişini redacted çıktıyla
+tarar; `Dependency Review` ise pull request'lerde moderate ve üzeri bağımlılık açıklarını reddeder.
+Dependabot npm ve GitHub Actions güncellemelerini haftalık kontrol eder ve otomatik merge yapmaz.
+
+Tüm harici Action'lar release sürüm yorumu ile tam commit SHA'ya sabitlenmiştir. Workflow'lar
+`pull_request` kullanır, `pull_request_target` kullanmaz, repository secret açığa çıkarmaz ve
+minimum izin ister. Güncel GitHub API metadata'sı native secret scanning ve push protection'ı
+etkin bildiriyor; Task 12 bu ayarları değiştirmez ve bağımsız secret scan'i zorunlu tutar.
+Detaylar için [CI güvenlik tasarımına](docs/CI-SECURITY-DESIGN.md) ve [ruleset kontrol listesine](docs/BRANCH-RULESET.md) bakın.
 
 ## Kurulum durumu
 
@@ -179,6 +197,7 @@ Ardından bir geliştirme penceresinde denemek için `F5` (veya VS Code'un "Run 
 npm run compile        # TypeScript derlemesi
 npm run lint            # ESLint
 npm run format:check    # Prettier kontrolü
+npm run verify:workflows # Workflow/Dependabot policy kontrolü
 npm test                # Vitest test paketi
 npm run audit:release   # Çevrimdışı manifest/lockfile/kimlik-bilgisi-deseni/VSIX denetimi
 npm run package          # out/ dizinini oluşturur ve vsce ile bir .vsix paketler
@@ -206,8 +225,7 @@ Bir güvenlik açığı için herkese açık bir issue açmayın. Özel olarak n
 
 Aşağıdaki öğeler **planlanmıştır, taahhüt edilmemiştir** ve değişebilir:
 
-- Her PR'da ve `main`'e her push'ta derleme/lint/format/test/audit çalıştıran GitHub Actions CI.
-- CI varlığında branch koruması ve zorunlu durum kontrolleri.
+- Task 12 PR'ı incelendikten sonra ek branch koruması/ruleset yapılandırması.
 - GitHub Release tabanlı bir kurulum yolu ile bir Visual Studio Code Marketplace publisher'ı ve listesi.
 - Gelecekte ek sağlayıcı desteği değerlendirilebilir; şu anda Codex, Claude Code, GitHub Copilot ve Grok'un ötesinde hiçbir şey planlanmamış veya uygulanmamıştır.
 

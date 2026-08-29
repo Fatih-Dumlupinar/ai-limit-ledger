@@ -173,16 +173,21 @@ describe('release-audit.mjs — credential-shaped pattern set', () => {
       pattern.lastIndex = 0;
       return pattern.test(line);
     });
+  const githubPrefix = ['gh', 'p_'].join('');
+  const openAiPrefix = ['sk', '-'].join('');
+  const awsPrefix = ['AK', 'IA'].join('');
+  const privateKeyMarker = ['-----BEGIN ', 'RSA PRIVATE KEY-----'].join('');
+  const bearerPrefix = ['Bearer', ' '].join('');
 
   // Each fixture line below carries the word "fixture" so this file's own credential-shaped
   // literals are triaged as `likely-fixture`, not `needs-review`, by `npm run audit:release`
   // itself — the same triage a real placeholder/test value gets, per the Task 10 brief.
   it.each([
-    "const token = 'ghp_abcdefghijklmnopqrstuvwxyz0123'", // fixture value
-    "apiKey: 'sk-abcdefghijklmnopqrstuvwx'", // fixture value
-    'AKIAABCDEFGHIJKLMNOP', // fixture value
-    '-----BEGIN RSA PRIVATE KEY-----', // fixture value
-    'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', // fixture value
+    `const token = '${githubPrefix}abcdefghijklmnopqrstuvwxyz0123'`, // fixture value
+    `apiKey: '${openAiPrefix}abcdefghijklmnopqrstuvwx'`, // fixture value
+    `${awsPrefix}ABCDEFGHIJKLMNOP`, // fixture value
+    privateKeyMarker, // fixture value
+    `Authorization: ${bearerPrefix}eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`, // fixture value
   ])('flags a realistic-looking secret: %s', (line) => {
     expect(matches(line)).toBe(true);
   });
@@ -202,7 +207,7 @@ describe('release-audit.mjs — credential-shaped pattern set', () => {
   });
 
   it('the fixture-marker allowlist does not match an unrelated real-looking value', () => {
-    expect(KNOWN_SAFE_FIXTURE_MARKERS.test('ghp_9f8e7d6c5b4a3210')).toBe(false);
+    expect(KNOWN_SAFE_FIXTURE_MARKERS.test(`${githubPrefix}9f8e7d6c5b4a3210`)).toBe(false);
   });
 });
 

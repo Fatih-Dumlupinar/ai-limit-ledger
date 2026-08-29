@@ -2,6 +2,9 @@
 
 _[Türkçe](README.tr.md)_
 
+[![CI](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml/badge.svg)](https://github.com/Fatih-Dumlupinar/ai-limit-ledger/actions/workflows/codeql.yml)
+
 AI Limit Ledger is a privacy-first VS Code extension for monitoring AI coding usage limits, quotas, reset windows, and provider activity for Codex, Claude Code, GitHub Copilot, and Grok. Copilot uses the official GitHub Billing REST API only after GitHub authentication or an explicitly supplied Plan-read fine-grained PAT. Grok usage is off until explicitly enabled and uses the official Grok Build ACP transport with an experimental `x.ai/billing` capability; the CLI-proxy fallback is also experimental and opt-in.
 
 AI Limit Ledger is an independent community project and is not affiliated with or endorsed by OpenAI, Anthropic, GitHub, or xAI.
@@ -28,6 +31,21 @@ The default **Rich Dashboard** is a themed Webview panel with reset times, plan,
 ## Data and privacy
 
 Codex remains local-only and read-only. Copilot calls `GET /user` and the official user AI-credit billing endpoint with an auth session from VS Code's GitHub Authentication API or a user-entered Plan-read PAT stored only in VS Code SecretStorage; tokens are never logged or written to global/workspace state, and no repository/admin/write permission is requested. Grok starts `grok agent stdio` only after its provider is explicitly enabled; AI Limit Ledger does not read Grok auth files, prompt/transcript/code data, or run `grok login` automatically. There is no telemetry.
+
+## CI and repository security
+
+Task 12 adds four read-first repository checks: `CI` compiles, lints, formats, audits, tests, and
+packages on Ubuntu and Windows; `CodeQL` scans JavaScript/TypeScript on pull requests, pushes to
+`main`, and weekly on the default branch; `Secret Scan` uses the official Gitleaks CLI release
+after SHA-256 verification and scans the complete Git history with redacted output; and
+`Dependency Review` rejects moderate-or-higher dependency vulnerabilities on pull requests.
+Dependabot checks npm and GitHub Actions weekly without automatic merging.
+
+All external Actions are pinned to full commit SHAs with release-version comments. Workflows use
+`pull_request`, never `pull_request_target`, expose no repository secrets, and use minimum
+permissions. The current GitHub API metadata reports native secret scanning and push protection
+enabled; Task 12 does not change those settings and keeps the independent scan as a required
+defense. See [the CI security design](docs/CI-SECURITY-DESIGN.md) and [the ruleset checklist](docs/BRANCH-RULESET.md).
 
 ## Installation status
 
@@ -179,6 +197,7 @@ Then launch the extension host with `F5` (or VS Code's "Run Extension" launch co
 npm run compile        # TypeScript build
 npm run lint            # ESLint
 npm run format:check    # Prettier check
+npm run verify:workflows # Workflow/Dependabot policy verifier
 npm test                # Vitest test suite
 npm run audit:release   # Offline manifest/lockfile/credential-pattern/VSIX audit
 npm run package          # Builds out/ and packages a .vsix with vsce
@@ -206,8 +225,7 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 
 The items below are **planned, not committed**, and may change:
 
-- GitHub Actions CI (compile/lint/format/test/audit on every PR and push to `main`).
-- Branch protection and required status checks once CI exists.
+- Additional branch protection/ruleset configuration after the Task 12 PR is reviewed.
 - A Visual Studio Code Marketplace publisher and listing, with a GitHub Release-based install path.
 - Additional provider support may be considered in the future; nothing beyond Codex, Claude Code, GitHub Copilot, and Grok is currently planned or implemented.
 

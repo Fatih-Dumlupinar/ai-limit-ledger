@@ -17,11 +17,19 @@ Thanks for your interest in contributing. This project is a privacy-first VS Cod
   npm run compile
   npm run lint
   npm run format:check
+  npm run verify:workflows
   npm test
   npm run audit:release
   ```
 
 Run the full chain above before opening a pull request. `npm run audit:release` (`scripts/release-audit.mjs`) is this project's own dependency-free, offline check for manifest/lockfile consistency, absolute-path and credential-shaped patterns, and (when pointed at a built `.vsix`) packaging content — it is separate from `npm audit`, which requires registry network access; both matter but they check different things.
+
+The repository workflows are part of the review surface. `CI` runs the quality matrix on Ubuntu and
+Windows and packages a VSIX only after quality passes. `CodeQL`, `Secret Scan`, and `Dependency
+Review` use read-first permissions; `Secret Scan` checks the full Git history with Gitleaks
+redaction and a verified official checksum. Every external Action reference is pinned to a full
+commit SHA with a release comment. Do not use `pull_request_target`, repository secrets, floating
+Action tags, `npm install`, or automatic Dependabot merging.
 
 ## Branching and pull requests
 
