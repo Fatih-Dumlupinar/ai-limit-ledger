@@ -102,8 +102,17 @@ or weakened.
 
 Dependabot checks npm and GitHub Actions weekly, targets `main`, and permits at most five open PRs
 per ecosystem. Development npm minor/patch updates and GitHub Actions minor/patch updates are
-grouped. Major updates are not in those groups and therefore remain separate. No automatic merge
-configuration or custom label that is absent from the repository is used.
+grouped. The npm ecosystem ignores `version-update:semver-major` for the wildcard dependency in
+normal version-update PRs, so major dependency migrations are manual, planned tasks. This is the
+official Dependabot `update-types` behavior: the constraint limits version updates and does not
+disable security updates. No `security-updates: false`, automatic merge configuration, or custom
+label that is absent from the repository is used.
+
+The Node development engine and the extension-host type contract are intentionally separate. The
+repository uses Node 24 for development (Node `>=22.12.0` is the supported engine floor), while
+`@types/node` remains on the compatible 20.x line and `@types/vscode`/`engines.vscode` describe
+the VS Code extension host. A major update to any of these contracts requires a separate
+migration task with changelog, peer-dependency, and CI compatibility review.
 
 ## Scope boundary
 

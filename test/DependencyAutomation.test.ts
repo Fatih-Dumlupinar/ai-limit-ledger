@@ -13,11 +13,11 @@ const dependencySource = readFileSync(
   resolve(ROOT, '.github/workflows/dependency-review.yml'),
   'utf8',
 );
+const dependabotSource = readFileSync(resolve(ROOT, '.github/dependabot.yml'), 'utf8');
 type YamlMap = Record<string, unknown>;
 const dependency = inspectWorkflow('dependency-review.yml', dependencySource).document
   .value as YamlMap;
-const dependabot = parseYamlDocument(readFileSync(resolve(ROOT, '.github/dependabot.yml'), 'utf8'))
-  .value as YamlMap;
+const dependabot = parseYamlDocument(dependabotSource).value as YamlMap;
 const dependabotUpdates = dependabot.updates as YamlMap[];
 
 describe('Dependency Review and Dependabot automation', () => {
@@ -64,6 +64,17 @@ describe('Dependency Review and Dependabot automation', () => {
     expect(group['dependency-type']).toBe('development');
     expect(group['update-types']).toEqual(['minor', 'patch']);
     expect(JSON.stringify(group)).not.toContain('major');
+  });
+
+  it('ignores npm normal semver-major updates without disabling security updates', () => {
+    const npm = dependabotUpdates.find((entry) => entry['package-ecosystem'] === 'npm') as YamlMap;
+    expect(npm.ignore).toEqual([
+      {
+        'dependency-name': '*',
+        'update-types': ['version-update:semver-major'],
+      },
+    ]);
+    expect(dependabotSource).not.toMatch(/security-updates\s*:\s*false/i);
   });
 
   it('configures weekly GitHub Actions updates with SHA-friendly minor/patch grouping', () => {

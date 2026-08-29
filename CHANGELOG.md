@@ -12,6 +12,13 @@
 - Corrected Grok ACP transport and `x.ai/billing` method provenance, including the experimental, opt-in CLI-proxy fallback.
 - Scoped the Codex token statement to the Codex provider and removed the repeated affiliation warning.
 - Recorded the current GitHub-native secret-scanning and push-protection availability for Task 12 planning.
+- Restored `@types/node` to the Node 20.x extension-host compatibility range after the incorrectly merged
+  Dependabot PR #5. PR #5 did not cause a runtime/provider error, but it introduced unnecessary extension-host
+  type compatibility risk; `@types/node` describes the type contract and does not automatically follow the
+  Node version used on a development machine. The PR #2 `@typescript-eslint` updates remain unchanged.
+- Configured Dependabot to ignore npm semver-major version updates in normal version-update PRs while keeping
+  minor/patch grouping and security updates available. Major dependency migrations are manual, planned tasks
+  evaluated against changelog impact, peer dependencies, and CI compatibility.
 
 ## 0.6.2
 

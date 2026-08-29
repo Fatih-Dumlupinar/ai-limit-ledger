@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 const ROOT = resolve(__dirname, '..');
 const packageJson = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
   engines: { vscode: string; node?: string };
+  devDependencies: Record<string, string>;
+};
+const packageLock = JSON.parse(readFileSync(resolve(ROOT, 'package-lock.json'), 'utf8')) as {
+  packages: Record<string, { version?: string; devDependencies?: Record<string, string> }>;
 };
 const docFiles = [
   'README.md',
@@ -78,5 +82,24 @@ describe('Task 10.1: supported Node LTS development policy', () => {
     const readme = readFileSync(resolve(ROOT, 'README.md'), 'utf8');
     expect(readme).toMatch(/extension host/i);
     expect(readme).toMatch(/zero production dependencies/i);
+  });
+
+  it('keeps Node development engines separate from Node 20 and VS Code extension-host types', () => {
+    expect(packageJson.engines.node).toBe('>=22.12.0');
+    expect(packageJson.engines.vscode).toBe('^1.95.0');
+    expect(packageJson.devDependencies['@types/node']).toBe('^20.17.0');
+    expect(packageJson.devDependencies['@types/vscode']).toBe('^1.95.0');
+    expect(packageLock.packages['node_modules/@types/node']?.version).toMatch(/^20\./);
+    expect(packageLock.packages['node_modules/@types/vscode']?.version).toMatch(/^1\./);
+  });
+
+  it('preserves the Task 12.0 toolchain majors and the Task 12 Dependabot update', () => {
+    expect(packageJson.devDependencies['@typescript-eslint/eslint-plugin']).toBe('^8.68.0');
+    expect(packageJson.devDependencies['@typescript-eslint/parser']).toBe('^8.18.0');
+    expect(packageJson.devDependencies.typescript).toMatch(/^\^5\./);
+    expect(packageJson.devDependencies.eslint).toMatch(/^\^9\./);
+    expect(packageJson.devDependencies.typescript).not.toMatch(/^\^7\./);
+    expect(packageJson.devDependencies.eslint).not.toMatch(/^\^10\./);
+    expect(packageLock.packages['']?.devDependencies).toEqual(packageJson.devDependencies);
   });
 });
