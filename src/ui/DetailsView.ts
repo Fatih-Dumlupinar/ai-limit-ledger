@@ -20,7 +20,7 @@ import {
   type ProviderCapabilityDescriptor,
   type ProviderPresentationState,
 } from '../providers/ProviderCapabilityContract';
-import type { ProviderSnapshot } from '../providers/types';
+import type { ProviderId, ProviderSnapshot } from '../providers/types';
 import {
   elapsedDuration,
   formatPercent,
@@ -66,6 +66,13 @@ import {
   type SafeUsageInsight,
   type DashboardMode,
 } from './SafeDashboard';
+import {
+  buildProviderPresentationSummary,
+  formatPresentedReset,
+  presentedPercentageText,
+  type PresentedQuotaWindow,
+  type ProviderPresentationSummary,
+} from './ProviderPresentation';
 import type { InsightsMode } from '../configuration/EffectiveSettings';
 export const PROVIDER_INITIALIZATION_TIMEOUT_MS = 10_000;
 export const DASHBOARD_VERSION = '0.6.0';
@@ -925,7 +932,7 @@ function actionButton(
         `<span class="action-button__state-icon-item" data-state-icon="${resultState}"${resultIconId !== resultState ? ' hidden' : ''}>${renderDashboardIcon(stateIconId(resultState) as DashboardIconId)}</span>`,
     )
     .join('');
-  return `<button type="button" class="action-button action-button--${state}" data-action-id="${actionId}" data-action-role="${role}" data-action-state="${state}" data-action-icon="${getDashboardActionIconId(actionId)}"${actionState?.requestId ? ` data-request-id="${escapeHtml(actionState.requestId)}"` : ''} data-retryable="${actionState?.retryable === true ? 'true' : 'false'}" data-default-label="${escapeHtml(localizedLabel)}" aria-describedby="dashboard-action-status" aria-busy="${busy ? 'true' : 'false'}"${busy ? ' disabled' : ''}><span class="action-button__leading-icon" aria-hidden="true"${busy || resultIconId ? ' hidden' : ''}>${leadingIcon}</span><span class="action-button__spinner" aria-hidden="true"${busy ? '' : ' hidden'}></span><span class="action-button__state-icon" aria-hidden="true"${busy || !resultIconId ? ' hidden' : ''}>${resultIconMarkup}</span><span class="action-button__label">${escapeHtml(displayLabel)}</span></button>`;
+  return `<button type="button" class="action-button action-button--${state}" data-action-id="${actionId}" data-action-role="${role}" data-action-state="${state}" data-action-icon="${getDashboardActionIconId(actionId)}"${actionState?.requestId ? ` data-request-id="${escapeHtml(actionState.requestId)}"` : ''}${actionState?.correlationId ? ` data-correlation-id="${escapeHtml(actionState.correlationId)}"` : ''} data-retryable="${actionState?.retryable === true ? 'true' : 'false'}" data-default-label="${escapeHtml(localizedLabel)}" aria-describedby="dashboard-action-status" aria-busy="${busy ? 'true' : 'false'}"${busy ? ' disabled' : ''}><span class="action-button__leading-icon" aria-hidden="true"${busy || resultIconId ? ' hidden' : ''}>${leadingIcon}</span><span class="action-button__spinner" aria-hidden="true"${busy ? '' : ' hidden'}></span><span class="action-button__state-icon" aria-hidden="true"${busy || !resultIconId ? ' hidden' : ''}>${resultIconMarkup}</span><span class="action-button__label">${escapeHtml(displayLabel)}</span></button>`;
 }
 
 function dashboardScript(catalog: UiTextCatalog = getUiTextCatalog()): string {
@@ -1477,7 +1484,11 @@ function formatSeconds(value: number | null): string {
   return value === null ? 'Not available' : `${Math.floor(value / 60)}m ${value % 60}s`;
 }
 
-function richInsightTable(insights: readonly SafeUsageInsight[], catalog: UiTextCatalog): string {
+function richInsightTable(
+  insights: readonly SafeUsageInsight[],
+  catalog: UiTextCatalog,
+  includeFieldProvenance = false,
+): string {
   const trendValues = insights
     .filter((insight) => insight.label.startsWith('dailyTokens:'))
     .map((insight) => Number(insight.value.replace(/[^0-9]/g, '')))
@@ -1500,10 +1511,13 @@ function richInsightTable(insights: readonly SafeUsageInsight[], catalog: UiText
       const trendBar = Number.isFinite(trendValue)
         ? `<span class="usage-insights-table__trend"><span>${escapeHtml(value)}</span><span class="usage-insights-table__bar" aria-hidden="true"><i style="width:${Math.round((trendValue / maxTrendValue) * 100)}%"></i></span></span>`
         : escapeHtml(value);
-      return `<tr><th scope="row">${escapeHtml(label)}</th><td>${trendBar}</td><td>${escapeHtml(insightSourceKindLabel(insight.sourceKind, catalog))}</td><td>${escapeHtml(insight.sourceLabel)}</td></tr>`;
+      const provenance = includeFieldProvenance
+        ? `${insightSourceKindLabel(insight.sourceKind, catalog)}: ${insight.sourceLabel}`
+        : '';
+      return `<tr><th scope="row">${escapeHtml(label)}</th><td>${trendBar}</td>${includeFieldProvenance ? `<td>${escapeHtml(provenance)}</td>` : ''}</tr>`;
     })
     .join('');
-  return `<table class="usage-insights-table"><thead><tr><th>${escapeHtml(catalog.metric)}</th><th>${escapeHtml(catalog.value)}</th><th>${escapeHtml(catalog.source)}</th><th>${escapeHtml(catalog.sourceProvenance)}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table class="usage-insights-table"><thead><tr><th scope="col">${escapeHtml(catalog.metric)}</th><th scope="col">${escapeHtml(catalog.value)}</th>${includeFieldProvenance ? `<th scope="col">${escapeHtml(catalog.sourceProvenance)}</th>` : ''}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderRichUsageInsights(snapshot: ProviderSnapshot): string {
@@ -1514,19 +1528,38 @@ function renderRichUsageInsights(snapshot: ProviderSnapshot): string {
     snapshot,
     Date.now(),
     dashboardRenderSettings.language ?? 'auto',
-  );
+  ).filter((insight) => {
+    if (insight.label === 'planType' && snapshot.plan) return false;
+    if (insight.label === 'rateLimits') return false;
+    if (
+      insight.label === 'resetAt' &&
+      uniqueUsageWindows(snapshot).some((window) => window.resetsAt)
+    )
+      return false;
+    if (insight.label === 'aiCreditsRemainingPercent' && copilotProgressWindow(snapshot))
+      return false;
+    return true;
+  });
   if (insights.length === 0) return '';
   const visible = insights.slice(0, 5);
   const rest = insights.slice(5);
+  const sourceKind = sourceKindForSnapshot(snapshot.source, snapshot.metadata);
+  const sourceLabel = localizedProviderSourceLabel(
+    normalizeProviderId(snapshot.providerId) as ProviderId,
+    sourceKind,
+    catalog,
+  );
+  const hasFieldProvenance = visible.some((insight) => insight.sourceKind !== sourceKind);
   const sessionHeading =
     snapshot.usageInsights.sessionMetrics && snapshot.providerId === 'claude'
       ? `<p class="card-note">${escapeHtml(catalog.latestObservedCliSession)}</p>`
       : '';
   const detail =
     rest.length > 0
-      ? `<details class="usage-insights-details"${mode === 'detailed' ? ' open' : ''}><summary>${escapeHtml(catalog.detailed)} (${rest.length})</summary>${richInsightTable(rest, catalog)}</details>`
+      ? `<details class="usage-insights-details"${mode === 'detailed' ? ' open' : ''}><summary>${escapeHtml(catalog.detailed)} (${rest.length})</summary>${richInsightTable(rest, catalog, hasFieldProvenance)}</details>`
       : '';
-  return `<section class="usage-insights"><h4>${escapeHtml(catalog.usageInsights)}</h4>${sessionHeading}${richInsightTable(visible, catalog)}${detail}</section>`;
+  const provenance = `<p class="usage-insights__provenance"><strong>${escapeHtml(catalog.sourceProvenance)}:</strong> ${escapeHtml(sourceLabel)}${hasFieldProvenance ? ` · ${escapeHtml(catalog.detailed)}` : ''}</p>`;
+  return `<section class="usage-insights"><h4>${escapeHtml(catalog.usageInsights)}</h4>${sessionHeading}${provenance}${richInsightTable(visible, catalog, hasFieldProvenance)}${detail}</section>`;
 }
 
 type DashboardActionItem = readonly [DashboardActionId, string];
@@ -1548,20 +1581,20 @@ function renderDashboardProviderCard(
           warning: 'Provider initialization timed out. Refresh or open diagnostics.',
         }
       : snapshot;
-  const windows = uniqueUsageWindows(displaySnapshot);
-  const hasNumeric =
-    descriptor.providerId === 'copilot'
-      ? Boolean(copilotProgressWindow(displaySnapshot))
-      : windows.some((window) => isFiniteNumber(window.usedPercent));
   const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
   const sourceKind = resolved.sourceKind;
+  const semantic = buildProviderPresentationSummary(displaySnapshot, {
+    now: Date.now(),
+    thresholds: dashboardRenderSettings.thresholds,
+    language: dashboardRenderSettings.language ?? 'auto',
+    resolved,
+  });
+  const hasNumeric = semantic.quotaWindows.some(
+    (window) => window.usedPercentage !== undefined || window.remainingPercentage !== undefined,
+  );
   const stateLabel = dashboardStateLabel(displaySnapshot, resolved, hasNumeric);
-  const capacitySeverity = windows
-    .map(
-      (window) =>
-        createRemainingCapacityProgress(window.usedPercent, dashboardRenderSettings.thresholds)
-          ?.severity,
-    )
+  const capacitySeverity = semantic.quotaWindows
+    .map((window) => window.severity)
     .find((severity) => severity === 'critical' || severity === 'warning');
   const severity =
     resolved.attention === 'error'
@@ -1574,8 +1607,9 @@ function renderDashboardProviderCard(
     resolved,
     hasNumeric,
     catalog,
+    semantic,
   );
-  const freshness = renderDashboardFreshness(displaySnapshot, hasNumeric, resolved);
+  const freshness = renderDashboardFreshness(displaySnapshot, hasNumeric, resolved, semantic);
   const actions = renderDashboardActionToolbar(
     renderDashboardProviderActions(displaySnapshot, descriptor.providerId),
     states,
@@ -1656,23 +1690,19 @@ function renderLocalizedDashboardUsageSummary(
   presentation: ProviderPresentationState,
   hasNumeric: boolean,
   catalog: UiTextCatalog,
+  semantic: ProviderPresentationSummary,
 ): string {
   if (snapshot.availability === 'manual-only' && descriptor.providerId === 'claude') {
     return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.connectedStatus}</span><span class="primary-usage__label">${catalog.manualUsageMode}</span></div><p class="card-note">${catalog.claudeExtensionConnected}</p><p class="card-note">${catalog.claudeAutomaticUsageRequirement}</p><p class="card-note">${catalog.automaticUsageUnavailable}</p></div>`;
   }
   if (descriptor.providerId === 'copilot') {
-    const progressWindow = copilotProgressWindow(snapshot);
-    const progress = progressWindow
-      ? createRemainingCapacityProgress(
-          progressWindow.usedPercent,
-          dashboardRenderSettings.thresholds,
-        )
-      : undefined;
+    const progressWindow = semantic.quotaWindows.find(
+      (window) => window.id === 'monthly-ai-credits' && window.fillPercentage !== undefined,
+    );
     const metrics = copilotMetricTilesLocalized(snapshot, catalog);
-    const progressMarkup =
-      progressWindow && progress
-        ? `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${percentageText(progress.remainingPercent, progress.usedPercent, dashboardRenderSettings.percentageMode ?? 'both', catalog)}</span><span class="primary-usage__label">${catalog.monthlyAiCredits}</span></div>${renderDashboardProgressWindow(descriptor.displayName, descriptor.providerId, progressWindow)}</div>`
-        : '';
+    const progressMarkup = progressWindow
+      ? `<div class="card-summary"><div class="usage-window-list">${renderPresentedDashboardProgressWindow(descriptor.displayName, descriptor.providerId, progressWindow, catalog)}</div></div>`
+      : '';
     return `${progressMarkup}${metrics ? `<dl class="metric-grid">${metrics}</dl>` : ''}${!progressMarkup && !metrics ? `<p class="card-note">${catalog.numericUsageUnavailable}</p>` : !progressMarkup ? `<p class="card-note">${catalog.monthlyAllowanceNotProvidedShort}</p>` : ''}`;
   }
   if (
@@ -1684,28 +1714,12 @@ function renderLocalizedDashboardUsageSummary(
   ) {
     return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.freePlan}</span><span class="primary-usage__label">${catalog.connectedStatus}</span></div><p class="card-note">${catalog.numericUsageNotExposed}</p></div>`;
   }
-  const windows = uniqueUsageWindows(snapshot).filter((window) =>
-    createRemainingCapacityProgress(window.usedPercent, dashboardRenderSettings.thresholds),
+  const windows = semantic.quotaWindows.filter(
+    (window) => window.usedPercentage !== undefined || window.remainingPercentage !== undefined,
   );
   if (!windows.length)
     return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.noUsageData}</span><span class="primary-usage__label">${localizedPresentationText(presentation, catalog)}</span></div><p class="card-note">${catalog.numericUsageUnavailable}</p>${snapshot.availability === 'waiting-for-first-response' ? `<p class="card-note">${catalog.claudeResponseDataRequirement}</p>` : ''}</div>`;
-  const progress = createRemainingCapacityProgress(
-    windows[0].usedPercent,
-    dashboardRenderSettings.thresholds,
-  );
-  if (!progress)
-    return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.noUsageData}</span><span class="primary-usage__label">${catalog.percentageNotProvided}</span></div><p class="card-note">${catalog.numericUsageUnavailable}</p></div>`;
-  const percentage = percentageText(
-    progress.remainingPercent,
-    progress.usedPercent,
-    dashboardRenderSettings.percentageMode ?? 'both',
-    catalog,
-  );
-  const primaryPercentage =
-    progress.severity === 'critical'
-      ? `${percentage} · ${catalog.critical.toLowerCase()}`
-      : percentage;
-  return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${primaryPercentage}</span><span class="primary-usage__label">${displayWindowLabel(descriptor.providerId, windows[0], catalog)}</span></div><div class="usage-window-list">${windows.map((window) => renderDashboardProgressWindow(descriptor.displayName, descriptor.providerId, window)).join('')}</div></div>`;
+  return `<div class="card-summary"><div class="usage-window-list">${windows.map((window) => renderPresentedDashboardProgressWindow(descriptor.displayName, descriptor.providerId, window, catalog)).join('')}</div></div>`;
 }
 
 function localizedPresentationText(
@@ -1823,8 +1837,14 @@ function renderDashboardProgressWindow(
   const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
   const label = displayWindowLabel(providerId, window, catalog);
   const ariaLabel = `${providerName} ${window.id || label} ${catalog.accountLimit.toLowerCase()} ${catalog.remaining.toLowerCase()}`;
-  const status = progress.statusText
-    ? `<span class="usage-progress__status usage-progress__status--${progress.severity}">${escapeHtml(progress.statusText)}</span>`
+  const statusText =
+    progress.severity === 'critical'
+      ? catalog.critical
+      : progress.severity === 'warning'
+        ? catalog.warning
+        : undefined;
+  const status = statusText
+    ? `<span class="usage-progress__status usage-progress__status--${progress.severity}">${escapeHtml(statusText)}</span>`
     : '';
   const percentage = percentageText(
     progress.remainingPercent,
@@ -1832,49 +1852,69 @@ function renderDashboardProgressWindow(
     dashboardRenderSettings.percentageMode ?? 'both',
     catalog,
   );
-  return `<div class="usage-window" data-window-id="${escapeHtml(window.id || label)}"><div class="usage-window__header"><strong>${escapeHtml(label)}</strong><span class="usage-progress__text">${percentage}</span></div><div class="usage-progress usage-progress--${progress.severity}" role="progressbar" aria-label="${escapeHtml(ariaLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.ariaValueNow}" aria-valuetext="${escapeHtml(progress.ariaValueText)}"><div class="usage-progress__fill" style="width:${progress.fillPercent}%"></div></div><div class="usage-window__meta"><span>${catalog.used} ${formatPercent(progress.usedPercent)}%</span><span>${catalog.remaining} ${formatPercent(progress.remainingPercent)}%</span>${status}<span>${catalog.reset} ${escapeHtml(resetCell(window.resetsAt))}</span></div></div>`;
+  return `<div class="usage-window" data-window-id="${escapeHtml(window.id || label)}"><div class="usage-window__header"><strong>${escapeHtml(label)}</strong><span class="usage-progress__text">${percentage}</span></div><div class="usage-progress usage-progress--${progress.severity}" role="progressbar" aria-label="${escapeHtml(ariaLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.ariaValueNow}" aria-valuetext="${escapeHtml(progress.ariaValueText)}"><div class="usage-progress__fill" style="width:${progress.fillPercent}%"></div></div><div class="usage-window__meta">${status}<span>${catalog.reset} ${escapeHtml(resetCell(window.resetsAt))}</span></div></div>`;
+}
+
+function renderPresentedDashboardProgressWindow(
+  providerName: string,
+  providerId: string,
+  window: PresentedQuotaWindow,
+  catalog: UiTextCatalog,
+): string {
+  const percentage =
+    presentedPercentageText(window, dashboardRenderSettings.percentageMode ?? 'both', catalog) ??
+    catalog.percentageNotProvided;
+  const status = window.statusText
+    ? `<span class="usage-progress__status usage-progress__status--${window.severity ?? 'normal'}">${escapeHtml(window.statusText)}</span>`
+    : '';
+  const ariaValueText =
+    window.ariaValueText ??
+    `${window.remainingPercentage ?? window.ariaValueNow ?? 0}% ${catalog.remaining.toLowerCase()}`;
+  const reset = window.reset
+    ? formatPresentedReset(window.reset, dashboardRenderSettings.timeFormat ?? 'both', catalog)
+    : catalog.notProvided;
+  const ariaLabel = `${providerName} ${window.id} ${catalog.accountLimit.toLowerCase()} ${catalog.remaining.toLowerCase()}`;
+  const progressMarkup =
+    window.fillPercentage !== undefined && window.ariaValueNow !== undefined
+      ? `<div class="usage-progress usage-progress--${window.severity ?? 'normal'}" role="progressbar" aria-label="${escapeHtml(ariaLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${window.ariaValueNow}" aria-valuetext="${escapeHtml(ariaValueText)}"><div class="usage-progress__fill" style="width:${window.fillPercentage}%"></div></div>`
+      : '';
+  return `<div class="usage-window${progressMarkup ? '' : ' usage-window--text-only'}" data-window-id="${escapeHtml(window.id)}"><div class="usage-window__header"><strong>${escapeHtml(window.label)}</strong><span class="usage-progress__text">${escapeHtml(percentage)}</span></div>${progressMarkup}<div class="usage-window__meta">${status}<span>${escapeHtml(catalog.reset)} ${escapeHtml(reset)}</span></div></div>`;
 }
 
 function renderLocalizedDashboardFreshness(
   snapshot: ProviderSnapshot,
   hasNumeric: boolean,
   presentation: ProviderPresentationState,
+  semantic?: ProviderPresentationSummary,
 ): string {
   const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
-  const checked = validTimestamp(snapshot.checkedAt) ?? validTimestamp(snapshot.observedAt);
-  const observed = validTimestamp(snapshot.observedAt);
-  const successful =
-    validTimestamp(snapshot.lastSuccessfulDataUpdate) ??
-    validTimestamp(snapshot.lastSuccessfulUpdateAt) ??
-    (hasNumeric ? observed : undefined);
-  const next =
-    validTimestamp(snapshot.nextFallbackRefreshAt) ??
-    validMetadataTimestamp(snapshot.metadata?.nextRefreshAt);
-  const lastEvent = validTimestamp(snapshot.lastProviderEventAt);
-  const nextFallback = validTimestamp(snapshot.nextFallbackRefreshAt);
-  const age =
-    hasNumeric && observed !== undefined ? elapsedDuration(observed) : catalog.notApplicable;
-  const stale =
-    snapshot.stale ||
-    presentation.dataAvailability === 'numeric-stale' ||
-    presentation.dataAvailability === 'numeric-last-known-good';
-  const successfulLine =
-    successful === undefined
-      ? ''
-      : `<span><strong>${catalog.lastSuccessfulDataUpdate}:</strong> ${escapeHtml(formatDate(successful, 'past-event'))}</span>`;
-  return `<div class="freshness-summary"><span><strong>${catalog.lastCheck}:</strong> ${escapeHtml(formatDate(checked, 'past-event'))}</span>${successfulLine}<span><strong>${catalog.lastProviderEvent}:</strong> ${escapeHtml(formatDate(lastEvent, 'past-event'))}</span><span><strong>${catalog.nextFallbackCheck}:</strong> ${escapeHtml(formatDate(nextFallback, 'future-target'))}</span><span><strong>${catalog.snapshotAge}:</strong> ${escapeHtml(age)}</span><span><strong>${catalog.nextAutomaticCheck}:</strong> ${escapeHtml(formatDate(next, 'future-target'))}</span></div>${stale ? `<p class="card-note">${catalog.showingLastKnownUsage}</p>` : ''}`;
+  const presentationSummary =
+    semantic ??
+    buildProviderPresentationSummary(snapshot, {
+      now: Date.now(),
+      thresholds: dashboardRenderSettings.thresholds,
+      language: dashboardRenderSettings.language ?? 'auto',
+      resolved: presentation,
+    });
+  const freshness = presentationSummary.freshness;
+  if (freshness.state === 'fresh')
+    return `<div class="freshness-summary"><span><strong>${catalog.dataFreshness}:</strong> ${escapeHtml(freshness.summaryText)}</span></div>`;
+  const details = freshness.detailLines
+    .map(
+      (line) =>
+        `<span><strong>${escapeHtml(line.label)}:</strong> ${escapeHtml(line.value)}</span>`,
+    )
+    .join('');
+  return `<div class="freshness-summary">${details}</div><p class="card-note">${catalog.showingLastKnownUsage}</p>`;
 }
 
 function renderDashboardFreshness(
   snapshot: ProviderSnapshot,
   hasNumeric: boolean,
   presentation: ProviderPresentationState,
+  semantic?: ProviderPresentationSummary,
 ): string {
-  const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
-  return renderLocalizedDashboardFreshness(snapshot, hasNumeric, presentation).replaceAll(
-    catalog.nextFallbackCheck,
-    catalog.nextFallbackRefresh,
-  );
+  return renderLocalizedDashboardFreshness(snapshot, hasNumeric, presentation, semantic);
   /* istanbul ignore next -- retained legacy implementation for source compatibility. */
   // eslint-disable-next-line no-unreachable
   const checked = validTimestamp(snapshot.checkedAt) ?? validTimestamp(snapshot.observedAt);
@@ -1916,8 +1956,16 @@ function renderLocalizedDashboardDetails(
 ): string {
   const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
   const sourceKind = sourceKindForSnapshot(snapshot.source, snapshot.metadata);
+  const hasPlanInsight = safeUsageInsightsForSnapshot(
+    snapshot,
+    Date.now(),
+    dashboardRenderSettings.language ?? 'auto',
+  ).some((insight) => insight.label === 'planType');
   const values: Array<readonly [string, string | undefined]> = [
-    [catalog.plan, safeText(snapshot.plan) ?? catalog.notProvided],
+    [
+      catalog.plan,
+      snapshot.plan ? safeText(snapshot.plan) : hasPlanInsight ? undefined : catalog.notProvided,
+    ],
     [catalog.cli, safeText(snapshot.cliVersion) ?? catalog.notProvided],
     [catalog.extension, safeText(snapshot.extensionVersion ?? snapshot.metadata?.extensionVersion)],
     [catalog.dataSource, localizedProviderSourceLabel(descriptor.providerId, sourceKind, catalog)],

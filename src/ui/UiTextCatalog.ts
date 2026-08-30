@@ -85,6 +85,11 @@ export function localizedRateLimitWindowLabel(
   durationMinutes: number | null | undefined,
   catalog: UiTextCatalog = getUiTextCatalog(),
 ): string {
+  if (
+    id?.trim().toLowerCase() === 'monthly-ai-credits' ||
+    id?.trim().toLowerCase() === 'copilot-monthly-ai-credits'
+  )
+    return catalog.monthlyAiCredits;
   const kind = rateLimitWindowKind(id, label, durationMinutes);
   switch (kind) {
     case 'five-hour':

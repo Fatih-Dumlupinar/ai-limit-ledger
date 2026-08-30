@@ -231,7 +231,7 @@ describe('Task 5 dashboard redesign', () => {
     );
     const card = providerArticle(html, 'codex');
 
-    expect(card).toContain('95% used · critical');
+    expect(card).toContain('5% left · 95% used');
     expect(card).toContain('style="width:5%"');
     expect(card).toContain('aria-valuenow="5"');
     expect(card).toContain('5% remaining, 95% used');

@@ -9,7 +9,6 @@ import {
   localizedProviderGuidance,
   localizedProviderLinkLabel,
   localizedProviderSourceLabel,
-  localizedRateLimitWindowLabel,
   percentageText,
 } from './UiTextCatalog';
 import {
@@ -24,7 +23,8 @@ import {
   resolveProviderPresentations,
   type ProviderPresentationState,
 } from '../providers/ProviderCapabilityContract';
-import type { ProviderSnapshot, UsageWindow } from '../providers/types';
+import type { ProviderSnapshot } from '../providers/types';
+import { buildProviderPresentationSummary, type PresentedFreshness } from './ProviderPresentation';
 import type { UsageInsightValue } from '../providers/UsageInsights';
 import type { InsightsMode } from '../configuration/EffectiveSettings';
 import type { LocalizationKey } from '../localization/LocalizationKeys';
@@ -69,6 +69,7 @@ export interface SafeProviderDocumentModel {
   requirementKey?: LocalizationKey;
   sourceKind: string;
   sourceLabel?: string;
+  freshness: PresentedFreshness;
   experimental: boolean;
   stale: boolean;
   usageWindows: SafeUsageWindow[];
@@ -311,57 +312,6 @@ function commandsFor(providerId: string, active: boolean): string[] {
     default:
       return [];
   }
-}
-
-function usageWindowKey(window: UsageWindow): string {
-  return safeText(window.id || window.label, 80) ?? 'usage-window';
-}
-
-function usageWindowsFor(
-  providerId: string,
-  snapshot: ProviderSnapshot,
-  now: number,
-  thresholds: RemainingCapacityThresholds = {},
-): SafeUsageWindow[] {
-  if (providerId === 'copilot') {
-    const allowance = snapshot.credits?.allowance;
-    const used = snapshot.credits?.used;
-    if (isFiniteNumber(allowance) && allowance > 0 && isFiniteNumber(used)) {
-      const usedPercent = (used / allowance) * 100;
-      return [
-        {
-          id: 'monthly-ai-credits',
-          label: 'Monthly AI credits',
-          usedPercent,
-          remainingPercent: 100 - usedPercent,
-        },
-      ];
-    }
-    return [];
-  }
-
-  const seen = new Set<string>();
-  return snapshot.usageWindows.flatMap((window) => {
-    const key = usageWindowKey(window);
-    if (seen.has(key)) return [];
-    seen.add(key);
-    const usedPercent = isFiniteNumber(window.usedPercent) ? window.usedPercent : undefined;
-    const progress = createRemainingCapacityProgress(usedPercent, thresholds);
-    const reset = safeResetTimestamp(window.resetsAt, now);
-    return [
-      {
-        id: key,
-        label: safeMarkdownText(window.label || window.id, 80) ?? 'Usage window',
-        ...(progress
-          ? { usedPercent: progress.usedPercent, remainingPercent: progress.remainingPercent }
-          : {}),
-        ...(reset !== undefined ? { resetsAt: reset } : {}),
-        ...(isFiniteNumber(window.windowDurationMinutes)
-          ? { windowDurationMinutes: window.windowDurationMinutes }
-          : {}),
-      },
-    ];
-  });
 }
 
 function metricsFor(providerId: string, snapshot: ProviderSnapshot): SafeMetric[] {
@@ -651,7 +601,21 @@ function providerModel(
   language: 'auto' | 'en' | 'tr' = 'auto',
 ): SafeProviderDocumentModel {
   const providerId = presentation.providerId;
-  const usageWindows = usageWindowsFor(providerId, snapshot, now, thresholds);
+  const semantic = buildProviderPresentationSummary(snapshot, {
+    now,
+    thresholds,
+    language,
+    resolved: presentation,
+  });
+  const usageWindows = semantic.quotaWindows.map((window) => ({
+    id: safeText(window.id, 80) ?? 'usage-window',
+    label: safeMarkdownText(window.label, 80) ?? 'Usage window',
+    ...(window.usedPercentage !== undefined ? { usedPercent: window.usedPercentage } : {}),
+    ...(window.remainingPercentage !== undefined
+      ? { remainingPercent: window.remainingPercentage }
+      : {}),
+    ...(window.reset ? { resetsAt: window.reset.at } : {}),
+  }));
   const hasNumericUsage = usageWindows.some((window) => window.usedPercent !== undefined);
   const sourceKind = presentation.sourceKind;
   const plan = safeMarkdownText(snapshot.plan);
@@ -680,6 +644,8 @@ function providerModel(
       ? { requirementKey: requirementKeyFor(providerId) }
       : {}),
     sourceKind,
+    sourceLabel: semantic.provenance[0]?.label,
+    freshness: semantic.freshness,
     experimental: sourceKind.startsWith('experimental'),
     stale: snapshot.stale || presentation.dataAvailability === 'numeric-last-known-good',
     usageWindows,
@@ -849,40 +815,33 @@ function formatCountdown(
     : `in ${days}d${remainingHours ? ` ${remainingHours}h` : ''}`;
 }
 
-function formatRelativeUpdate(
-  value: number | undefined,
-  now: number,
-  language: 'auto' | 'en' | 'tr' = 'auto',
-): string {
-  const catalog = getUiTextCatalog(language);
-  const turkish = catalog === getUiTextCatalog('tr');
-  if (value === undefined) return catalog.notProvided;
-  return formatConfiguredTime(value, now, 'relative', catalog, 'past-event');
-  /* istanbul ignore next -- legacy relative implementation retained for compatibility. */
-  // eslint-disable-next-line no-unreachable
-  if ((value as number) >= now) return formatCountdown(value, now, language);
-  const seconds = Math.floor((now - (value as number)) / 1000);
-  if (seconds < 60) return catalog.justNow;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return turkish ? `${minutes} dk önce` : `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return turkish ? `${hours} sa önce` : `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return turkish ? `${days} gün önce` : `${days}d ago`;
-}
-
 function progressBar(
   usedPercent: number | undefined,
+  remainingPercent: number | undefined,
   thresholds: RemainingCapacityThresholds,
   percentageMode: SafeDashboardDocumentModel['percentageMode'],
   language: 'auto' | 'en' | 'tr',
 ): string | undefined {
   const progress = createRemainingCapacityProgress(usedPercent, thresholds);
-  if (!progress) return undefined;
+  const catalog = getUiTextCatalog(language);
+  if (!progress) {
+    if (typeof remainingPercent !== 'number' || !Number.isFinite(remainingPercent))
+      return undefined;
+    const remaining = Math.min(100, Math.max(0, Math.round(remainingPercent * 10) / 10));
+    const used = Math.round((100 - remaining) * 10) / 10;
+    return percentageMode === 'remaining'
+      ? `${remaining}% ${catalog.remaining.toLowerCase()}`
+      : percentageText(remaining, used, percentageMode, catalog);
+  }
   const filled = Math.min(10, Math.max(0, Math.round(progress.remainingPercent / 10)));
   const bar = `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`;
-  const status = progress.statusText ? ` · ${progress.statusText}` : '';
-  const catalog = getUiTextCatalog(language);
+  const statusText =
+    progress.severity === 'critical'
+      ? catalog.critical
+      : progress.severity === 'warning'
+        ? catalog.warning
+        : undefined;
+  const status = statusText ? ` · ${statusText}` : '';
   const text =
     percentageMode === 'remaining'
       ? `${progress.remainingPercent}% ${catalog.remaining.toLowerCase()}`
@@ -932,29 +891,75 @@ function renderUsageInsights(
 ): string[] {
   if (model.insightsMode === 'hidden' || model.usageInsights.length === 0) return [];
   const entries = model.usageInsights.filter((insight) => {
+    if (insight.label === 'planType' && model.plan) return false;
+    if (insight.label === 'rateLimits') return false;
+    if (insight.label === 'resetAt' && model.usageWindows.some((window) => window.resetsAt))
+      return false;
+    if (insight.label === 'aiCreditsRemainingPercent' && model.usageWindows.length > 0)
+      return false;
     if (!insight.label.startsWith('dailyTokens:')) return true;
     return model.insightsMode === 'detailed';
   });
   const visible = model.insightsMode === 'summary' ? entries.slice(0, 5) : entries;
   if (visible.length === 0) return [];
-  const rows = visible.map((insight) => {
-    const label = insight.label.startsWith('dailyTokens:')
-      ? `${catalog.lifetimeTokens} (${insight.label.slice('dailyTokens:'.length)})`
-      : localizedInsightLabel(insight.label, catalog);
-    const flags = [
-      insight.isEstimated ? catalog.estimatedSessionCost : '',
-      insight.isDerived ? catalog.derivedMetric : '',
-      insight.isExperimental ? catalog.experimentalSource : '',
-    ].filter(Boolean);
-    return `| ${label} | ${insight.value}${flags.length ? ` (${flags.join(', ')})` : ''} | ${insightSourceKindLabel(insight.sourceKind, catalog)} | ${insight.sourceLabel} |`;
-  });
+  const sessionLabels = new Set([
+    'model',
+    'cliVersion',
+    'contextCapacity',
+    'inputTokens',
+    'outputTokens',
+    'cacheCreationInputTokens',
+    'cacheReadInputTokens',
+    'contextUsed',
+    'contextRemaining',
+    'estimatedSessionCost',
+    'sessionDuration',
+    'apiWaitTime',
+    'linesAdded',
+    'linesRemoved',
+    'fastMode',
+    'effortLevel',
+    'thinking',
+    'exceeds200kTokens',
+    'outputStyle',
+  ]);
+  const accountEntries = visible.filter((insight) => !sessionLabels.has(insight.label));
+  const sessionEntries = visible.filter((insight) => sessionLabels.has(insight.label));
+  const renderTable = (tableEntries: readonly SafeUsageInsight[]): string[] => {
+    const hasFieldProvenance = tableEntries.some(
+      (insight) => insight.sourceKind !== model.sourceKind,
+    );
+    const rows = tableEntries.map((insight) => {
+      const label = insight.label.startsWith('dailyTokens:')
+        ? `${catalog.lifetimeTokens} (${insight.label.slice('dailyTokens:'.length)})`
+        : localizedInsightLabel(insight.label, catalog);
+      const flags = [
+        insight.isEstimated ? catalog.estimatedSessionCost : '',
+        insight.isDerived ? catalog.derivedMetric : '',
+        insight.isExperimental ? catalog.experimentalSource : '',
+      ].filter(Boolean);
+      const provenance = hasFieldProvenance
+        ? ` | ${insightSourceKindLabel(insight.sourceKind, catalog)}: ${insight.sourceLabel}`
+        : '';
+      return `| ${label} | ${insight.value}${flags.length ? ` (${flags.join(', ')})` : ''}${provenance} |`;
+    });
+    return [
+      hasFieldProvenance
+        ? `| ${catalog.metric} | ${catalog.value} | ${catalog.sourceProvenance} |`
+        : `| ${catalog.metric} | ${catalog.value} |`,
+      hasFieldProvenance ? '|---|---|---|' : '|---|---|',
+      ...rows,
+    ];
+  };
   const lines = [
     `### ${catalog.usageInsights}`,
     '',
-    `| ${catalog.metric} | ${catalog.value} | ${catalog.source} | ${catalog.sourceProvenance} |`,
-    '|---|---|---|---|',
-    ...rows,
+    ...(model.sourceLabel ? [`_${catalog.sourceProvenance}: ${model.sourceLabel}_`, ''] : []),
   ];
+  if (accountEntries.length)
+    lines.push(`**${catalog.accountSummary}**`, '', ...renderTable(accountEntries));
+  if (sessionEntries.length)
+    lines.push('', `**${catalog.latestObservedCliSession}**`, '', ...renderTable(sessionEntries));
   if (model.insightsMode === 'summary' && entries.length > visible.length)
     lines.push(
       '',
@@ -977,7 +982,7 @@ function renderProvider(
     `### ${model.displayName}`,
     '',
     `${catalog.status}: ${status}`,
-    `${catalog.source}: ${localizedProviderSourceLabel(model.providerId as ProviderId, model.sourceKind, catalog)}`,
+    `${catalog.source}: ${model.sourceLabel ?? localizedProviderSourceLabel(model.providerId as ProviderId, model.sourceKind, catalog)}`,
   ];
   if (model.plan) lines.push(`${catalog.plan}: ${model.plan}`);
   if (model.cliVersion) lines.push(`${catalog.cli}: ${model.cliVersion}`);
@@ -991,19 +996,18 @@ function renderProvider(
   lines.push('');
   if (model.usageWindows.length > 0) {
     for (const window of model.usageWindows) {
-      lines.push(
-        localizedRateLimitWindowLabel(
-          window.id,
-          window.label,
-          window.windowDurationMinutes,
-          catalog,
-        ),
+      lines.push(window.label);
+      const progress = progressBar(
+        window.usedPercent,
+        window.remainingPercent,
+        thresholds,
+        percentageMode,
+        language,
       );
-      const progress = progressBar(window.usedPercent, thresholds, percentageMode, language);
       lines.push(progress ?? catalog.numericUsageUnavailable);
       if (window.resetsAt !== undefined)
         lines.push(
-          `${catalog.reset}: ${formatCountdown(window.resetsAt, now, language, 'deadline')} (${formatDate(window.resetsAt, now, timeFormat, language, 'deadline')})`,
+          `${catalog.reset}: ${formatDate(window.resetsAt, now, timeFormat, language, 'deadline')}`,
         );
       lines.push('');
     }
@@ -1016,18 +1020,12 @@ function renderProvider(
   if (insightLines.length) lines.push(...insightLines, '');
   for (const metric of model.rawMetrics)
     lines.push(`${localizedMetricLabel(metric.label, catalog)}: ${metric.value}`);
-  if (model.lastCheckAt !== undefined)
-    lines.push(
-      `${catalog.lastCheck}: ${formatDate(model.lastCheckAt, now, timeFormat, language, 'past-event')}`,
-    );
-  if (model.lastProviderEventAt !== undefined)
-    lines.push(
-      `${catalog.lastProviderEvent}: ${formatRelativeUpdate(model.lastProviderEventAt, now, language)}`,
-    );
-  if (model.lastSuccessfulUpdateAt !== undefined)
-    lines.push(
-      `${catalog.lastSuccessfulUpdate}: ${formatRelativeUpdate(model.lastSuccessfulUpdateAt, now, language)}`,
-    );
+  if (model.freshness.state === 'fresh') {
+    lines.push(`${catalog.dataFreshness}: ${model.freshness.summaryText}`);
+  } else {
+    lines.push(catalog.dataFreshness);
+    lines.push(...model.freshness.detailLines.map((line) => `${line.label}: ${line.value}`));
+  }
   if (model.nextRefreshAt !== undefined)
     lines.push(
       `${catalog.nextAutomaticCheck}: ${formatCountdown(model.nextRefreshAt, now, language, 'future-target')}`,

@@ -51,15 +51,17 @@ describe('ProviderStatusBarTooltip', () => {
         metadata: { fallbackIntervalSeconds: 60 },
       }),
       NOW,
+      { density: 'detailed', percentageMode: 'both', timeFormat: 'both' },
     );
 
     expect(tooltip).toContain('86% left');
     expect(tooltip).toContain('14% used');
     expect(tooltip).toContain('█████████░');
-    expect(tooltip).toContain('`█████████░` 86% left · 14% used');
+    expect(tooltip).not.toContain('`█████████░` 86% left · 14% used');
     expect(tooltip).toContain('Next fallback check: in 38s');
-    expect(tooltip).toContain('Last provider event: just now');
-    expect(tooltip).toContain('Resets');
+    expect(tooltip).toContain('Data freshness:** just now');
+    expect(tooltip).not.toContain('Last provider event:');
+    expect(tooltip).toContain('Reset:');
     expect(tooltip).toContain('in 5d');
     expect(tooltip).not.toContain('Next refresh:');
   });
@@ -83,7 +85,7 @@ describe('ProviderStatusBarTooltip', () => {
       NOW,
     );
 
-    expect(tooltip.indexOf('5h')).toBeLessThan(tooltip.indexOf('7d'));
+    expect(tooltip.indexOf('5-hour window')).toBeLessThan(tooltip.indexOf('7-day window'));
     expect(tooltip).toContain('Experimental Claude OAuth usage');
     expect(tooltip).toContain('Next automatic check: in 1m 22s');
     expect(tooltip).toContain('model \\[x\\]\\(command:evil\\)');
@@ -113,7 +115,7 @@ describe('ProviderStatusBarTooltip', () => {
 
     expect(copilot).toContain('AI credits used: 0');
     expect(copilot).not.toContain('NaN');
-    expect(grok).toContain('Usage not provided');
+    expect(grok).toContain('Numeric usage is not available');
     expect(grok).not.toContain('NaN%');
   });
 
@@ -125,6 +127,7 @@ describe('ProviderStatusBarTooltip', () => {
         metadata: { modelName: 'account@example.com 123e4567-e89b-12d3-a456-426614174000' },
       }),
       NOW,
+      { density: 'detailed', percentageMode: 'used' },
     );
 
     expect(tooltip).toContain('0% used');

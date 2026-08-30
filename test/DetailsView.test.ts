@@ -456,7 +456,7 @@ describe('DetailsView', () => {
     expect(html).toContain('0.4% used');
   });
 
-  it('shows the Last provider event, Next fallback refresh, and Snapshot age fields', () => {
+  it('keeps provider event, fallback refresh, and snapshot age in technical details', () => {
     const observedAt = Date.now();
     const html = renderDashboard(
       [
@@ -488,9 +488,9 @@ describe('DetailsView', () => {
       ],
       createNonce(),
     );
-    expect(html).toContain('Last provider event:');
-    expect(html).toContain('Next fallback refresh:');
-    expect(html).toContain('Snapshot age:');
+    expect(html).toContain('Last provider event');
+    expect(html).toContain('Next fallback refresh');
+    expect(html).toContain('Snapshot age');
   });
 
   it('explains the missing-subscription case instead of leaving rate limits blank', () => {
@@ -563,7 +563,7 @@ describe('DetailsView', () => {
     expect(html).not.toContain('Last successful data update');
   });
 
-  it('shows both "Last check" and "Last successful data update" once a real snapshot is parsed', () => {
+  it('collapses healthy freshness into one semantic summary', () => {
     const observedAt = new Date('2026-08-23T09:00:00.000Z').getTime();
     const checkedAt = new Date('2026-08-23T10:00:00.000Z').getTime();
     const html = renderDashboard(
@@ -594,10 +594,7 @@ describe('DetailsView', () => {
       ],
       createNonce(),
     );
-    expect(html).toContain('Last check:');
-    expect(html).toContain('Last successful data update:');
-    expect(html).toContain(new Date(observedAt).toLocaleString('en-US'));
-    expect(html).toContain(new Date(checkedAt).toLocaleString('en-US'));
+    expect(html).toContain('<div class="freshness-summary"><span><strong>Data freshness:</strong>');
   });
 
   it('offers install-guide, terminal launch (when the CLI is present), and copy-diagnostics for upstream-statusline-not-invoked', () => {

@@ -50,7 +50,7 @@ See the full [provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) fo
   provider failures isolated — a missing CLI never removes a provider card.
 - A **Rich Dashboard** (themed webview) and a **Safe Dashboard** (webview-free, read-only text
   document) that render from the same typed provider snapshots and stay in parity.
-- Hover tooltip with a Markdown usage table; click for the full dashboard.
+- Hover tooltip with compact or detailed Markdown usage summaries; click for the full dashboard.
 - Typed English/Turkish localization across every runtime surface.
 - Zero production dependencies and no telemetry.
 

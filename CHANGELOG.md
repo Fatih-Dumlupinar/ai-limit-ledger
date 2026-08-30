@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Task 14.3 — Tooltip and Dashboard UI/UX refinement.** No version bump, provider API,
+  release, or workflow changes. Added a shared typed provider-presentation model so the status
+  bar, compact/detailed tooltips, Rich Dashboard, and Safe Dashboard share quota ordering,
+  missing-vs-zero handling, reset formatting, freshness states, source provenance, and
+  accessibility semantics. Compact surfaces now prioritize current quota state; detailed surfaces
+  keep insights, provenance, and refresh mechanics secondary and deduplicated. Added localized
+  English/Turkish regression coverage for Codex, Claude, GitHub Copilot, and Grok, including
+  official-vs-experimental source handling and privacy/CSP invariants.
+
 - **Task 14.2 — Automatic release candidates and a permanent privacy audit.** No provider, runtime,
   status bar, or dashboard behavior change, and no version bump: this task changes the release
   machinery and adds a repository audit tool. The Marketplace upload and the GitHub Release both

@@ -5,17 +5,13 @@ import {
   type ProviderPresentationState,
 } from '../providers/ProviderCapabilityContract';
 import type { ProviderSnapshot } from '../providers/types';
+import { type RemainingCapacityThresholds } from '../limits/RemainingCapacityProgress';
+import { getUiTextCatalog } from './UiTextCatalog';
 import {
-  createRemainingCapacityProgress,
-  type RemainingCapacityThresholds,
-} from '../limits/RemainingCapacityProgress';
-import {
-  formatConfiguredTime,
-  getUiTextCatalog,
-  localizedRateLimitWindowLabel,
-  percentageText,
-} from './UiTextCatalog';
-import { normalizeToEpochMs } from '../limits/TimestampNormalizer';
+  buildProviderPresentationSummary,
+  formatPresentedReset,
+  presentedPercentageText,
+} from './ProviderPresentation';
 
 export type StatusBarMode = 'remaining' | 'used' | 'compact' | 'both' | 'detailed';
 
@@ -34,46 +30,32 @@ export function providerSegmentText(
 ): string {
   const presentation = resolveProviderPresentation({ snapshot: provider });
   const name = provider.providerName;
-  const window = provider.usageWindows[0];
+  const catalog = getUiTextCatalog(options.language ?? 'auto');
+  const semantic = buildProviderPresentationSummary(provider, {
+    now: Date.now(),
+    thresholds: options.thresholds,
+    language: options.language,
+  });
+  const window = semantic.quotaWindows[0];
   if (window) {
-    const progress = createRemainingCapacityProgress(window.usedPercent, options.thresholds);
-    const catalog = getUiTextCatalog(options.language ?? 'auto');
-    if (!progress) return `${name} ${catalog.noNumericUsage.toLowerCase()}`;
     const percentageMode =
       options.percentageMode ??
       (mode === 'used' ? 'used' : mode === 'both' || mode === 'detailed' ? 'both' : 'remaining');
-    const value = percentageText(
-      progress.remainingPercent,
-      progress.usedPercent,
-      percentageMode,
-      catalog,
-    );
+    const value = presentedPercentageText(window, percentageMode, catalog);
+    if (!value) return `${name} ${catalog.noNumericUsage.toLowerCase()}`;
     if (mode === 'compact') return `${name} ${value}`;
-    const resetAt =
-      window.resetsAt === null || window.resetsAt === undefined
-        ? undefined
-        : normalizeToEpochMs(window.resetsAt, 'unix-seconds');
-    const resetText =
-      resetAt === null || resetAt === undefined
-        ? catalog.notProvided
-        : formatConfiguredTime(
-            resetAt,
-            Date.now(),
-            options.timeFormat ?? 'both',
-            catalog,
-            'deadline',
-          );
-    const reset = window.resetsAt === null ? '' : ` · ${catalog.reset} ${resetText}`;
-    return `${name} ${localizedRateLimitWindowLabel(window.id, window.label, window.windowDurationMinutes, catalog)} ${value}${reset}`;
+    const reset = window.reset
+      ? ` · ${catalog.reset} ${formatPresentedReset(window.reset, options.timeFormat ?? 'both', catalog)}`
+      : '';
+    return `${name} ${window.label} ${value}${reset}`;
   }
 
   if (
     normalizeProviderId(provider.providerId) === 'copilot' &&
     typeof provider.credits?.used === 'number'
   ) {
-    return `${name} ${provider.credits.used} ${getUiTextCatalog(options.language ?? 'auto').credits}`;
+    return `${name} ${provider.credits.used} ${catalog.credits.toLowerCase()}`;
   }
-  const catalog = getUiTextCatalog(options.language ?? 'auto');
   switch (presentation.normalizedState) {
     case 'authentication-required':
       return `${name} ${catalog.signInRequired.toLowerCase()}`;
