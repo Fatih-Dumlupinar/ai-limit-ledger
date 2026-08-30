@@ -30,7 +30,7 @@ function readJson(relPath) {
 
 function purlFor(name, version) {
   const encodedName = name.startsWith('@')
-    ? `%40${name.slice(1).replace('/', '%2F')}`
+    ? `%40${name.slice(1).replaceAll('/', '%2F')}`
     : encodeURIComponent(name);
   return `pkg:npm/${encodedName}@${encodeURIComponent(version)}`;
 }
