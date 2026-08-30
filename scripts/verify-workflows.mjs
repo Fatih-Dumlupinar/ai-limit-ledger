@@ -20,6 +20,8 @@ export const EXPECTED_WORKFLOWS = [
   'codeql.yml',
   'secret-scan.yml',
   'dependency-review.yml',
+  'release-candidate.yml',
+  'finalize-release.yml',
 ];
 
 export const ACTION_RELEASES = Object.freeze({
@@ -34,6 +36,10 @@ export const ACTION_RELEASES = Object.freeze({
     tag: 'v5.0.0',
     sha: 'a1d282b36b6f3519aa1f3fc636f609c47dddb294',
   },
+  'actions/attest-build-provenance': {
+    tag: 'v4.2.2',
+    sha: '4d101475d8b20a2381f78447822ac1eab6504dd8',
+  },
 });
 
 export const GITLEAKS_RELEASE = Object.freeze({
@@ -47,7 +53,14 @@ const WORKFLOW_NAMES = {
   'codeql.yml': 'CodeQL',
   'secret-scan.yml': 'Secret Scan',
   'dependency-review.yml': 'Dependency Review',
+  'release-candidate.yml': 'Release Candidate',
+  'finalize-release.yml': 'Finalize Release',
 };
+
+// These two release workflows are manually dispatched only — never on pull_request/push/schedule
+// — so they are checked against an exact single-trigger allowlist, the same way
+// dependency-review.yml is restricted to pull_request only (see validateTriggers).
+export const WORKFLOW_DISPATCH_ONLY_WORKFLOWS = ['release-candidate.yml', 'finalize-release.yml'];
 
 function lineIndent(raw) {
   const match = raw.match(/^ */);
@@ -395,7 +408,16 @@ function validateCommonWorkflow(file, document, errors) {
   if (/\bsecrets(?:\.|\[)/i.test(text)) issue(errors, file, 'repository secrets are not allowed');
   if (/(?:npm\s+install|npm\s+i(?!\s*ci\b))/i.test(text))
     issue(errors, file, 'npm install is forbidden; use npm ci');
-  if (/(?:npm\s+publish|vsce\s+publish|gh\s+release|marketplace\.visualstudio)/i.test(text))
+  // vsce/npm publish is forbidden everywhere, with no exception — no workflow in this repository
+  // is ever allowed to publish to the Marketplace or npm. `gh release` and a literal reference to
+  // the Marketplace listing URL are reserved for finalize-release.yml, whose entire job is to
+  // create the GitHub Release once a human has manually verified the Marketplace upload — every
+  // other workflow (including release-candidate.yml) must never touch either.
+  if (/(?:npm\s+publish|vsce\s+publish)/i.test(text))
+    issue(errors, file, 'release or publish operation is forbidden');
+  if (file !== 'finalize-release.yml' && /gh\s+release/i.test(text))
+    issue(errors, file, 'release or publish operation is forbidden');
+  if (file !== 'finalize-release.yml' && /marketplace\.visualstudio/i.test(text))
     issue(errors, file, 'release or publish operation is forbidden');
   for (const location of document.locations.filter((item) => item.key === 'uses')) {
     const result = checkActionReference(location.value, location.comment);
@@ -439,35 +461,65 @@ function validateCommonWorkflow(file, document, errors) {
       }
     }
   }
+  // fetch-depth: 0 (full history) is reserved for the two workflows that structurally need it:
+  // the secret scanner (must scan every historical commit) and finalize-release.yml (must prove
+  // the candidate commit is an ancestor of main via `git merge-base`, which needs real history).
+  const FETCH_DEPTH_ZERO_ALLOWLIST = new Set(['secret-scan.yml', 'finalize-release.yml']);
   for (const location of document.locations.filter((item) => item.key === 'fetch-depth')) {
-    if (file !== 'secret-scan.yml' || location.value !== 0)
+    if (!FETCH_DEPTH_ZERO_ALLOWLIST.has(file) || location.value !== 0)
       issue(
         errors,
         file,
-        'fetch-depth: 0 is reserved for the full-history secret scan',
+        'fetch-depth: 0 is reserved for the full-history secret scan and release ancestry check',
         location.line,
       );
   }
+  // Retention budgets differ deliberately by artifact purpose: short-lived CI/debug artifacts
+  // stay at 1-7 days, while a release-candidate artifact must survive long enough for a human to
+  // complete the manual Marketplace upload and approve finalize-release (14-30 days).
+  const RETENTION_RANGE = file === 'release-candidate.yml' ? [14, 30] : [1, 7];
   for (const location of document.locations.filter((item) => item.key === 'retention-days')) {
-    if (typeof location.value !== 'number' || location.value > 7 || location.value < 1)
-      issue(errors, file, 'artifact retention must be between 1 and 7 days', location.line);
+    const [min, max] = RETENTION_RANGE;
+    if (typeof location.value !== 'number' || location.value > max || location.value < min)
+      issue(
+        errors,
+        file,
+        `artifact retention must be between ${min} and ${max} days`,
+        location.line,
+      );
   }
 }
 
+// Per-file allowlist of write-level permission names, checked against *every* `permissions:`
+// block in the document (top-level workflow permissions and any job-level override) — a job can
+// narrow or elevate the workflow-level default, so both scopes must be checked, not just the
+// workflow-level one.
+const WRITE_PERMISSION_ALLOWLIST = {
+  'codeql.yml': new Set(['security-events']),
+  'release-candidate.yml': new Set(['id-token', 'attestations']),
+  'finalize-release.yml': new Set(['contents']),
+};
+
 function validatePermissions(file, document, errors) {
-  const permissions = document.value?.permissions;
-  if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) return;
-  for (const [permission, level] of Object.entries(permissions)) {
-    if (level === 'write' || level === 'write-all') {
-      const allowed = file === 'codeql.yml' && permission === 'security-events';
-      if (!allowed) issue(errors, file, `write permission ${permission} is not allowed`);
+  const allowedWrite = WRITE_PERMISSION_ALLOWLIST[file] ?? new Set();
+  for (const location of document.locations) {
+    if (location.key !== 'permissions') continue;
+    const permissions = location.value;
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) continue;
+    for (const [permission, level] of Object.entries(permissions)) {
+      if ((level === 'write' || level === 'write-all') && !allowedWrite.has(permission))
+        issue(errors, file, `write permission ${permission} is not allowed`, location.line);
     }
+    if (
+      file !== 'codeql.yml' &&
+      Object.prototype.hasOwnProperty.call(permissions, 'security-events')
+    )
+      issue(errors, file, 'security-events permission is reserved for CodeQL', location.line);
   }
-  if (file !== 'codeql.yml' && Object.prototype.hasOwnProperty.call(permissions, 'security-events'))
-    issue(errors, file, 'security-events permission is reserved for CodeQL');
-  if (file === 'codeql.yml' && permissions.contents !== 'read')
+  const topPermissions = document.value?.permissions;
+  if (file === 'codeql.yml' && topPermissions?.contents !== 'read')
     issue(errors, file, 'CodeQL requires contents: read');
-  if (file === 'codeql.yml' && permissions['security-events'] !== 'write')
+  if (file === 'codeql.yml' && topPermissions?.['security-events'] !== 'write')
     issue(errors, file, 'CodeQL requires security-events: write');
 }
 
@@ -482,6 +534,16 @@ function validateTriggers(file, document, errors) {
       Object.keys(trigger).length !== 1
     )
       issue(errors, file, 'Dependency Review must trigger only on pull_request');
+  } else if (WORKFLOW_DISPATCH_ONLY_WORKFLOWS.includes(file)) {
+    // Release workflows must never run automatically (no pull_request/push/schedule) — only a
+    // human explicitly dispatching them, which is what keeps tag/release/artifact creation under
+    // manual control.
+    if (
+      !trigger ||
+      !Object.prototype.hasOwnProperty.call(trigger, 'workflow_dispatch') ||
+      Object.keys(trigger).length !== 1
+    )
+      issue(errors, file, `${WORKFLOW_NAMES[file]} must trigger only on workflow_dispatch`);
   } else {
     for (const name of ['pull_request', 'push', 'workflow_dispatch'])
       if (!trigger || !Object.prototype.hasOwnProperty.call(trigger, name))
@@ -594,6 +656,85 @@ function validateSecretScan(document, errors) {
     issue(errors, 'secret-scan.yml', 'secret-scan artifact handling must be explicit');
 }
 
+function validateReleaseCandidate(document, errors) {
+  const jobs = document.value?.jobs;
+  const build = jobs?.build;
+  const text = JSON.stringify(build ?? '');
+  if (!build || typeof build !== 'object')
+    issue(errors, 'release-candidate.yml', 'a build job is required');
+  const inputs = document.value?.on?.workflow_dispatch?.inputs;
+  if (
+    !inputs ||
+    typeof inputs !== 'object' ||
+    !Object.prototype.hasOwnProperty.call(inputs, 'version')
+  )
+    issue(errors, 'release-candidate.yml', 'a required "version" input is required');
+  for (const command of [
+    'npm ci',
+    'npm run compile',
+    'npm run lint',
+    'npm run format:check',
+    'npm run verify:workflows',
+    'npm audit',
+    'npm audit --omit=dev',
+    'npm run audit:release',
+    'npm test',
+    'npm run package',
+  ]) {
+    if (!text.includes(command))
+      issue(errors, 'release-candidate.yml', `build job is missing ${command}`);
+  }
+  if (!text.includes('actions/upload-artifact'))
+    issue(errors, 'release-candidate.yml', 'build job must upload the release candidate artifact');
+  if (!text.includes('retention-days'))
+    issue(
+      errors,
+      'release-candidate.yml',
+      'release candidate artifact must declare retention-days',
+    );
+}
+
+function validateFinalizeRelease(document, errors) {
+  const jobs = document.value?.jobs;
+  const finalize = jobs?.finalize;
+  const text = JSON.stringify(finalize ?? '');
+  if (!finalize || typeof finalize !== 'object')
+    issue(errors, 'finalize-release.yml', 'a finalize job is required');
+  if (finalize?.environment !== 'production-release')
+    issue(
+      errors,
+      'finalize-release.yml',
+      'finalize job must run under the production-release environment',
+    );
+  const inputs = document.value?.on?.workflow_dispatch?.inputs;
+  const requiredInputs = [
+    'version',
+    'candidate_run_id',
+    'commit_sha',
+    'marketplace_url',
+    'marketplace_confirmation',
+  ];
+  for (const name of requiredInputs) {
+    if (!inputs || !Object.prototype.hasOwnProperty.call(inputs, name))
+      issue(errors, 'finalize-release.yml', `a required "${name}" input is required`);
+  }
+  const fullText = workflowStrings(document);
+  if (!fullText.includes('I_HAVE_VERIFIED_MARKETPLACE_0.7.0'))
+    issue(errors, 'finalize-release.yml', 'exact Marketplace confirmation phrase is required');
+  if (
+    !fullText.includes(
+      'https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger',
+    )
+  )
+    issue(errors, 'finalize-release.yml', 'exact Marketplace listing URL is required');
+  for (const command of ['gh run view', 'gh run download', 'gh release create', 'gh api']) {
+    if (!text.includes(command))
+      issue(errors, 'finalize-release.yml', `finalize job is missing ${command}`);
+  }
+  if (text.includes('--force') || text.includes('--clobber'))
+    issue(errors, 'finalize-release.yml', 'force/overwrite operations are forbidden');
+}
+
 function validateNoRuntimeImports(document, errors, file) {
   const text = workflowStrings(document);
   if (/\b(?:src|out)\/providers\b|require\([^)]*providers|from ['"][^'"]*providers/i.test(text))
@@ -609,6 +750,8 @@ export function inspectWorkflow(file, source) {
   if (file === 'ci.yml') validateCi(document, errors);
   if (file === 'codeql.yml') validateCodeql(document, errors);
   if (file === 'secret-scan.yml') validateSecretScan(document, errors);
+  if (file === 'release-candidate.yml') validateReleaseCandidate(document, errors);
+  if (file === 'finalize-release.yml') validateFinalizeRelease(document, errors);
   validateNoRuntimeImports(document, errors, file);
   return { document, errors };
 }

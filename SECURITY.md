@@ -1,5 +1,66 @@
 # AI Limit Ledger Security
 
+## Secure release system and first Marketplace release (Task 14)
+
+Two new `workflow_dispatch`-only GitHub Actions workflows implement a manual-approval release
+process for the 0.7.0 first Marketplace release; see `docs/RELEASE-PROCESS.md` for the full
+procedure.
+
+`.github/workflows/release-candidate.yml` runs with workflow-level `permissions: contents: read`
+and refuses to run for any ref other than `main` or any version other than the one this workflow
+was written for. It verifies the checked-out commit matches `origin/main`, runs the full
+compile/lint/format/`verify:workflows`/`npm audit`/`audit:release`/test chain, packages the VSIX,
+audits it, and generates a SHA-256 checksum, a CycloneDX-shaped SBOM
+(`scripts/generate-sbom.mjs`), and a release manifest (`scripts/generate-release-manifest.mjs`)
+containing only safe fields (version, publisher, extension ID, commit, toolchain versions, package
+hash/size/file-count, test counts, audit summary, build timestamp, workflow run ID, repository) —
+never a user path, token, or runner-temp path. Its one job additionally requests `id-token: write`
+and `attestations: write` (scoped to that job only) to produce a build-provenance attestation via
+the official `actions/attest-build-provenance` action, available because this repository is public.
+The resulting artifact is retained 14-30 days and uploaded with a name that embeds the short commit
+SHA. This workflow never tags, releases, or publishes anything.
+
+`.github/workflows/finalize-release.yml` runs its one job under the `production-release` GitHub
+Environment — a required-reviewer approval gate the repository owner configures in GitHub Settings,
+never created or modified by workflow code — with `permissions: contents: write` and
+`permissions: actions: read` (the minimum needed to create a tag/Release and to download a
+candidate artifact from another run), scoped to that job only. Every input (`version`,
+`candidate_run_id`, `commit_sha`, `marketplace_url`, `marketplace_confirmation`) is validated
+against a strict allowlist — an exact version match, a `^[0-9a-f]{40}$` commit SHA, an exact
+Marketplace listing URL, and a literal `I_HAVE_VERIFIED_MARKETPLACE_0.7.0` confirmation phrase —
+before anything else runs, and every value reaches a shell command only through an `env:` mapping,
+never interpolated directly into a `run:` step (the same untrusted-input rule
+`scripts/verify-workflows.mjs` already enforces for every workflow). The workflow re-downloads the
+candidate artifact, recomputes its SHA-256 against both the release manifest and `SHA256SUMS.txt`,
+confirms the candidate commit is an ancestor of `main` via `git merge-base --is-ancestor`, and
+re-runs the VSIX release audit before creating anything. Tag and Release creation are idempotent
+and never force-move a tag or overwrite an existing release asset — an existing tag/release that
+doesn't match the expected commit fails the run instead of being altered.
+
+Neither workflow creates, stores, requests, or echoes a Marketplace PAT, `VSCE_PAT`, or any other
+publishing credential, calls a Marketplace publish API, or runs `vsce publish`/`npm publish`. The
+first Marketplace upload is a manual VSIX upload performed by the project owner outside CI — see
+"Why no PAT" in `docs/RELEASE-PROCESS.md`.
+
+`scripts/verify-workflows.mjs` was extended to check both new workflows structurally: an exclusive
+`workflow_dispatch` trigger (no `pull_request`/`push`/`schedule`), a per-file write-permission
+allowlist now checked at every `permissions:` block in the document (previously only the
+workflow-level block was checked, since no existing workflow had a job-level override before this
+task), a 14-30 day retention band specific to `release-candidate.yml` (every other workflow stays
+at 1-7 days), `fetch-depth: 0` allowed only for the full-history secret scan and
+`finalize-release.yml`'s ancestry check, and a narrowed release/publish-operation ban so only
+`finalize-release.yml` may reference `gh release` or the Marketplace listing URL string — `vsce
+publish`/`npm publish` remain forbidden in every workflow file with no exception. All actions used
+by both workflows, including `actions/attest-build-provenance`, are pinned to a full 40-character
+release commit SHA in `scripts/verify-workflows.mjs`'s approved-release table, the same mechanism
+that already pins `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`,
+`github/codeql-action`, and `actions/dependency-review-action`.
+
+`@vscode/vsce` remains a `devDependency` only, on its existing stable pinned version, installed
+deterministically via `npm ci`/`package-lock.json`; no workflow uses `npm install -g` or an
+uncontrolled `npx` download, and `npm run package` (the only place `vsce package` runs) never
+publishes.
+
 ## Repository CI security (Task 12)
 
 The repository has four checks: `CI`, `CodeQL`, `Secret Scan`, and `Dependency Review`. CI runs

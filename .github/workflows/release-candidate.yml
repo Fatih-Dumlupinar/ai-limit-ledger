@@ -1,0 +1,201 @@
+name: Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact release version to build (must match package.json)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_VERSION: 0.7.0
+  EXPECTED_PUBLISHER: fatihdumlupinar-dev
+  EXPECTED_NAME: ai-limit-ledger
+
+jobs:
+  build:
+    name: Build Release Candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Verify trigger ref is main
+        env:
+          TRIGGER_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+            echo "release-candidate must be dispatched from the main branch, got $TRIGGER_REF" >&2
+            exit 1
+          fi
+
+      - name: Validate requested version input
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$INPUT_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "requested version ($INPUT_VERSION) does not match the expected release version ($EXPECTED_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Verify checked-out commit matches origin/main
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          local_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse origin/main)"
+          if [ "$local_sha" != "$remote_sha" ]; then
+            echo "checked-out commit ($local_sha) does not match origin/main ($remote_sha)" >&2
+            exit 1
+          fi
+          echo "GIT_COMMIT_SHA=$local_sha" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verify package manifest identity and version
+        run: |
+          set -euo pipefail
+          node --eval '
+            const pkg = require("./package.json");
+            const lock = require("./package-lock.json");
+            const expectedVersion = process.env.EXPECTED_VERSION;
+            const errors = [];
+            if (pkg.version !== expectedVersion) errors.push(`package.json version ${pkg.version} !== ${expectedVersion}`);
+            if (lock.version !== expectedVersion) errors.push(`package-lock.json version ${lock.version} !== ${expectedVersion}`);
+            if (lock.packages && lock.packages[""] && lock.packages[""].version !== expectedVersion) {
+              errors.push("package-lock.json packages[\"\"] version does not match");
+            }
+            if (pkg.publisher !== process.env.EXPECTED_PUBLISHER) errors.push(`publisher ${pkg.publisher} !== ${process.env.EXPECTED_PUBLISHER}`);
+            if (pkg.name !== process.env.EXPECTED_NAME) errors.push(`name ${pkg.name} !== ${process.env.EXPECTED_NAME}`);
+            if (pkg.preview !== true) errors.push("preview must be exactly true");
+            if (pkg.private !== true) errors.push("private must be exactly true");
+            if (errors.length > 0) {
+              console.error(errors.join("\n"));
+              process.exit(1);
+            }
+          '
+
+      - name: Record toolchain versions
+        run: |
+          set -euo pipefail
+          echo "RELEASE_NODE_VERSION=$(node --version)" >> "$GITHUB_ENV"
+          echo "RELEASE_NPM_VERSION=$(npm --version)" >> "$GITHUB_ENV"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Verify workflow policy
+        run: npm run verify:workflows
+
+      - name: Audit all dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Audit source-tree release readiness
+        run: npm run audit:release
+
+      - name: Run full test suite
+        run: npm test
+
+      - name: Collect test metrics
+        run: npx vitest run --reporter=json --outputFile="$RUNNER_TEMP/vitest-report.json"
+
+      - name: Collect audit summaries
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/npm-audit-all.json"
+          npm audit --omit=dev --json > "$RUNNER_TEMP/npm-audit-prod.json"
+
+      - name: Build VSIX package
+        run: npm run package
+
+      - name: Locate packaged VSIX
+        run: |
+          set -euo pipefail
+          vsix="$(find . -maxdepth 1 -type f -name '*.vsix' -print -quit)"
+          test -n "$vsix"
+          vsix="${vsix#./}"
+          echo "VSIX_PATH=$vsix" >> "$GITHUB_ENV"
+
+      - name: Audit packaged VSIX
+        run: npm run audit:release -- "$VSIX_PATH"
+
+      - name: Generate SHA-256 checksum
+        run: |
+          set -euo pipefail
+          sha256sum "$VSIX_PATH" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Generate SBOM
+        run: node scripts/generate-sbom.mjs sbom.cdx.json
+
+      - name: Generate release manifest
+        env:
+          RELEASE_VSIX_PATH: ${{ env.VSIX_PATH }}
+          RELEASE_VITEST_JSON_PATH: ${{ runner.temp }}/vitest-report.json
+          RELEASE_AUDIT_ALL_JSON: ${{ runner.temp }}/npm-audit-all.json
+          RELEASE_AUDIT_PROD_JSON: ${{ runner.temp }}/npm-audit-prod.json
+          RELEASE_GIT_COMMIT: ${{ env.GIT_COMMIT_SHA }}
+          RELEASE_NODE_VERSION: ${{ env.RELEASE_NODE_VERSION }}
+          RELEASE_NPM_VERSION: ${{ env.RELEASE_NPM_VERSION }}
+          RELEASE_WORKFLOW_RUN_ID: ${{ github.run_id }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: node scripts/generate-release-manifest.mjs release-manifest.json
+
+      - name: Copy release notes
+        run: cp docs/RELEASE-NOTES-0.7.0.md RELEASE_NOTES.md
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.VSIX_PATH }}
+
+      - name: Compute short commit SHA for artifact naming
+        run: echo "SHORT_SHA=${GIT_COMMIT_SHA:0:12}" >> "$GITHUB_ENV"
+
+      - name: Upload release candidate artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ai-limit-ledger-${{ env.EXPECTED_VERSION }}-rc-${{ env.SHORT_SHA }}
+          path: |
+            *.vsix
+            SHA256SUMS.txt
+            release-manifest.json
+            sbom.cdx.json
+            RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 21

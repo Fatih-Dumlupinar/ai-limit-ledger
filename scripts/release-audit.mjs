@@ -436,6 +436,14 @@ export const VSIX_DENYLIST_PATTERNS = [
   // docs/MARKETPLACE-ASSET-INVENTORY.md's "VSIX packaging policy" section.
   /^extension\/assets\/marketplace\//,
   /^extension\/docs\/MARKETPLACE-/,
+  // Task 14 release-process docs — internal to the release procedure, never needed by the
+  // installed extension. Excluded from the VSIX via .vscodeignore; listed here too for the same
+  // regression-safety reason as the Marketplace docs above.
+  /^extension\/docs\/RELEASE-PROCESS\.md$/,
+  /^extension\/docs\/FIRST-MARKETPLACE-RELEASE-/,
+  /^extension\/docs\/INSTALLATION-MIGRATION-/,
+  /^extension\/docs\/ROLLBACK\.md$/,
+  /^extension\/docs\/RELEASE-NOTES-/,
 ];
 
 // vsce packages README/CHANGELOG/LICENSE under its own Marketplace-convention names/casing
@@ -659,9 +667,10 @@ function reportHashes(vsixResult) {
 export const EXPECTED_MARKETPLACE_PUBLISHER = 'fatihdumlupinar-dev';
 export const EXPECTED_PACKAGE_NAME = 'ai-limit-ledger';
 export const EXPECTED_EXTENSION_ID = `${EXPECTED_MARKETPLACE_PUBLISHER}.${EXPECTED_PACKAGE_NAME}`;
-// Task 13 intentionally does not change the version. Update this constant only as part of a
-// deliberate, separate version-bump task — never as a side effect of a Marketplace-listing change.
-export const EXPECTED_TASK_VERSION = '0.6.2';
+// Task 14 is the deliberate, separate version-bump task referenced by the Task 13 comment this
+// replaces: it raises the first Marketplace release to 0.7.0. Update this constant only as part
+// of a deliberate version-bump task — never as a side effect of an unrelated change.
+export const EXPECTED_TASK_VERSION = '0.7.0';
 
 export const PLACEHOLDER_PUBLISHER_VALUES = new Set([
   'local',

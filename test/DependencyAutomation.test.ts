@@ -99,7 +99,7 @@ describe('Dependency Review and Dependabot automation', () => {
       /auto[-_ ]?merge|merge-method/i,
     );
     expect(workflows).not.toMatch(/src[\\/]providers|from ['"][^'"]*providers/i);
-    expect(packageJson.version).toBe('0.6.2');
+    expect(packageJson.version).toBe('0.7.0');
     expect(packageJson.dependencies ?? {}).toEqual({});
     expect(verifyRepository(ROOT).ok).toBe(true);
   });

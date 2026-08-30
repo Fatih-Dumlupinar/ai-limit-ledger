@@ -2,7 +2,8 @@
 
 This document is the single source of truth for the intended Visual Studio Marketplace listing
 metadata. It does not itself publish anything — see `docs/MARKETPLACE-PREFLIGHT.md` for the manual
-checklist to run before any future `vsce publish` (Task 14 or later).
+checklist and `docs/RELEASE-PROCESS.md` for the full release procedure. Publishing is always a
+manual VSIX upload; this project does not use `vsce publish`.
 
 ## Identity
 
@@ -13,7 +14,7 @@ checklist to run before any future `vsce publish` (Task 14 or later).
 | Extension package name | `ai-limit-ledger`                     |
 | Permanent extension ID | `fatihdumlupinar-dev.ai-limit-ledger` |
 | Display name           | AI Limit Ledger                       |
-| Version                | 0.6.2                                 |
+| Version                | 0.7.0                                 |
 | Preview                | `true` (first Marketplace release)    |
 
 The permanent extension ID (`fatihdumlupinar-dev.ai-limit-ledger`) cannot be changed after first
@@ -130,8 +131,8 @@ Full detail: `docs/PROVIDER_CAPABILITY_MATRIX.md`.
 
 This document and `scripts/release-audit.mjs` verify everything checkable from the source tree.
 The following can only be confirmed by someone with access to
-`https://marketplace.visualstudio.com/manage/publishers/fatihdumlupinar-dev` at actual publish time
-(Task 14), and are explicitly out of scope for Task 13:
+`https://marketplace.visualstudio.com/manage/publishers/fatihdumlupinar-dev` at actual publish
+time, per `docs/RELEASE-PROCESS.md`, and were explicitly out of scope for Task 13:
 
 - Final Marketplace-side rendering of the README (image URLs, table formatting, badge rendering).
 - Whether the publisher display name ("Fatih Dumlupınar Dev") renders as intended.

@@ -1,0 +1,219 @@
+name: Finalize Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to finalize (must be exactly 0.7.0)'
+        required: true
+        type: string
+      candidate_run_id:
+        description: 'Successful Release Candidate workflow run ID to promote'
+        required: true
+        type: string
+      commit_sha:
+        description: 'Full 40-character commit SHA the candidate was built from'
+        required: true
+        type: string
+      marketplace_url:
+        description: 'Exact published Marketplace listing URL, confirming the manual upload'
+        required: true
+        type: string
+      marketplace_confirmation:
+        description: 'Type I_HAVE_VERIFIED_MARKETPLACE_0.7.0 to confirm the manual Marketplace upload was verified'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finalize-release-${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_VERSION: 0.7.0
+  EXPECTED_PUBLISHER: fatihdumlupinar-dev
+  EXPECTED_NAME: ai-limit-ledger
+  EXPECTED_EXTENSION_ID: fatihdumlupinar-dev.ai-limit-ledger
+  EXPECTED_MARKETPLACE_URL: https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger
+  EXPECTED_CONFIRMATION: I_HAVE_VERIFIED_MARKETPLACE_0.7.0
+  TAG_NAME: v0.7.0
+
+jobs:
+  finalize:
+    name: Finalize GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-release
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate inputs against strict allowlist
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RUN_ID: ${{ inputs.candidate_run_id }}
+          INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
+          INPUT_MARKETPLACE_URL: ${{ inputs.marketplace_url }}
+          INPUT_CONFIRMATION: ${{ inputs.marketplace_confirmation }}
+        run: |
+          set -euo pipefail
+          fail() { echo "$1" >&2; exit 1; }
+
+          [ "$INPUT_VERSION" = "$EXPECTED_VERSION" ] || fail "version must be exactly $EXPECTED_VERSION"
+          [[ "$INPUT_RUN_ID" =~ ^[0-9]+$ ]] || fail "candidate_run_id must be a positive integer"
+          [[ "$INPUT_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "commit_sha must be a full 40-character lowercase hex SHA"
+          [ "$INPUT_MARKETPLACE_URL" = "$EXPECTED_MARKETPLACE_URL" ] || fail "marketplace_url must be exactly $EXPECTED_MARKETPLACE_URL"
+          [ "$INPUT_CONFIRMATION" = "$EXPECTED_CONFIRMATION" ] || fail "marketplace_confirmation must be exactly $EXPECTED_CONFIRMATION"
+
+          echo "RUN_ID=$INPUT_RUN_ID" >> "$GITHUB_ENV"
+          echo "COMMIT_SHA=$INPUT_COMMIT_SHA" >> "$GITHUB_ENV"
+
+      - name: Checkout repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify candidate run belongs to this repository and succeeded
+        run: |
+          set -euo pipefail
+          workflow_name="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json workflowName --jq .workflowName)"
+          event_name="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json event --jq .event)"
+          conclusion="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)"
+          head_sha="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)"
+
+          [ "$workflow_name" = "Release Candidate" ] || { echo "run $RUN_ID is not a Release Candidate run" >&2; exit 1; }
+          [ "$event_name" = "workflow_dispatch" ] || { echo "run $RUN_ID was not triggered by workflow_dispatch" >&2; exit 1; }
+          [ "$conclusion" = "success" ] || { echo "run $RUN_ID did not conclude successfully (conclusion: $conclusion)" >&2; exit 1; }
+          [ "$head_sha" = "$COMMIT_SHA" ] || { echo "run $RUN_ID head SHA ($head_sha) does not match commit_sha input" >&2; exit 1; }
+
+      - name: Verify commit is part of main's history
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "$COMMIT_SHA" origin/main || {
+            echo "commit_sha ($COMMIT_SHA) is not an ancestor of origin/main" >&2
+            exit 1
+          }
+
+      - name: Download candidate artifact
+        run: |
+          set -euo pipefail
+          # EXPECTED_VERSION is this workflow's own hardcoded constant (never attacker-controlled),
+          # so it is safe to interpolate directly into the jq filter string here — `gh api --jq`
+          # has no `--arg` flag of its own to bind it as a jq variable instead.
+          artifact_name="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+            --jq ".artifacts[] | select(.name | startswith(\"ai-limit-ledger-${EXPECTED_VERSION}-rc-\")) | .name" \
+            | head -n1)"
+          [ -n "$artifact_name" ] || { echo "no matching release-candidate artifact found on run $RUN_ID" >&2; exit 1; }
+          echo "ARTIFACT_NAME=$artifact_name" >> "$GITHUB_ENV"
+
+          rc_dir="$RUNNER_TEMP/rc-artifact"
+          mkdir -p "$rc_dir"
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" -n "$artifact_name" --dir "$rc_dir"
+          echo "RC_DIR=$rc_dir" >> "$GITHUB_ENV"
+
+      - name: Verify candidate artifact integrity and identity
+        run: |
+          set -euo pipefail
+          test -f "$RC_DIR/release-manifest.json"
+          test -f "$RC_DIR/SHA256SUMS.txt"
+          vsix="$(find "$RC_DIR" -maxdepth 1 -type f -name '*.vsix' -print -quit)"
+          test -n "$vsix"
+
+          manifest_version="$(node -p "require('$RC_DIR/release-manifest.json').version")"
+          manifest_commit="$(node -p "require('$RC_DIR/release-manifest.json').gitCommit")"
+          manifest_publisher="$(node -p "require('$RC_DIR/release-manifest.json').publisher")"
+          manifest_extension_id="$(node -p "require('$RC_DIR/release-manifest.json').extensionId")"
+          manifest_sha="$(node -p "require('$RC_DIR/release-manifest.json').package.sha256")"
+
+          [ "$manifest_version" = "$EXPECTED_VERSION" ] || { echo "manifest version mismatch: $manifest_version" >&2; exit 1; }
+          [ "$manifest_commit" = "$COMMIT_SHA" ] || { echo "manifest gitCommit does not match commit_sha input" >&2; exit 1; }
+          [ "$manifest_publisher" = "$EXPECTED_PUBLISHER" ] || { echo "manifest publisher mismatch: $manifest_publisher" >&2; exit 1; }
+          [ "$manifest_extension_id" = "$EXPECTED_EXTENSION_ID" ] || { echo "manifest extensionId mismatch: $manifest_extension_id" >&2; exit 1; }
+
+          computed_sha="$(sha256sum "$vsix" | awk '{print $1}')"
+          [ "$computed_sha" = "$manifest_sha" ] || { echo "recomputed VSIX SHA-256 does not match release-manifest.json" >&2; exit 1; }
+
+          recorded_sha="$(awk '{print $1; exit}' "$RC_DIR/SHA256SUMS.txt")"
+          [ "$computed_sha" = "$recorded_sha" ] || { echo "recomputed VSIX SHA-256 does not match SHA256SUMS.txt" >&2; exit 1; }
+
+          echo "VSIX_PATH=$vsix" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Re-run VSIX release audit
+        run: node scripts/release-audit.mjs "$VSIX_PATH"
+
+      - name: Create or verify release tag
+        run: |
+          set -euo pipefail
+          existing_sha=""
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG_NAME" >/dev/null 2>&1; then
+            object_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG_NAME" --jq .object.sha)"
+            object_type="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG_NAME" --jq .object.type)"
+            if [ "$object_type" = "tag" ]; then
+              existing_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq .object.sha)"
+            else
+              existing_sha="$object_sha"
+            fi
+          fi
+
+          if [ -n "$existing_sha" ]; then
+            if [ "$existing_sha" != "$COMMIT_SHA" ]; then
+              echo "tag $TAG_NAME already exists and points at $existing_sha, not $COMMIT_SHA — refusing to move it" >&2
+              exit 1
+            fi
+            echo "tag $TAG_NAME already exists and matches commit_sha; leaving it untouched"
+          else
+            tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
+              -f tag="$TAG_NAME" \
+              -f message="AI Limit Ledger $TAG_NAME (Preview)" \
+              -f object="$COMMIT_SHA" \
+              -f type=commit \
+              -f "tagger[name]=github-actions[bot]" \
+              -f "tagger[email]=41898282+github-actions[bot]@users.noreply.github.com" \
+              --jq .sha)"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG_NAME" -f sha="$tag_sha"
+            echo "created annotated tag $TAG_NAME at $COMMIT_SHA"
+          fi
+
+      - name: Create or verify GitHub Release
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            release_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG_NAME" --jq .sha)"
+            if [ "$release_commit" != "$COMMIT_SHA" ]; then
+              echo "release $TAG_NAME already exists but resolves to $release_commit, not $COMMIT_SHA" >&2
+              exit 1
+            fi
+            echo "release $TAG_NAME already exists and matches commit_sha; will only add missing assets"
+          else
+            gh release create "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "AI Limit Ledger $TAG_NAME (Preview)" \
+              --notes-file "$RC_DIR/RELEASE_NOTES.md" \
+              --prerelease
+          fi
+
+      - name: Upload release assets without overwriting existing ones
+        run: |
+          set -euo pipefail
+          existing_assets="$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for f in "$RC_DIR"/*.vsix "$RC_DIR/SHA256SUMS.txt" "$RC_DIR/release-manifest.json" "$RC_DIR/sbom.cdx.json" "$RC_DIR/RELEASE_NOTES.md"; do
+            [ -f "$f" ] || continue
+            base="$(basename "$f")"
+            if printf '%s\n' "$existing_assets" | grep -qxF "$base"; then
+              echo "asset $base already present on release $TAG_NAME; skipping (no overwrite)"
+            else
+              gh release upload "$TAG_NAME" "$f" --repo "$GITHUB_REPOSITORY"
+            fi
+          done

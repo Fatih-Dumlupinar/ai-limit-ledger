@@ -62,8 +62,8 @@ describe('Task 13: Marketplace publisher and extension identity', () => {
     expect(id).toBe(EXPECTED_EXTENSION_ID);
   });
 
-  it('version is unchanged by Task 13', () => {
-    expect(packageJson.version).toBe('0.6.2');
+  it('version is 0.7.0, the first Marketplace release (Task 14)', () => {
+    expect(packageJson.version).toBe('0.7.0');
     expect(packageJson.version).toBe(EXPECTED_TASK_VERSION);
   });
 
