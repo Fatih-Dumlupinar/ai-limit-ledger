@@ -1,9 +1,20 @@
 import { mkdtempSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SharedSnapshotStore } from '../src/storage/SharedSnapshotStore';
 import type { ProviderSnapshot } from '../src/providers/types';
+
+// node:fs/promises is a built-in ESM module namespace, which Node makes non-configurable —
+// vi.spyOn cannot redefine `rename` on it directly. Mocking the module and wrapping the real
+// implementation in a vi.fn keeps every other test's real filesystem behavior intact while
+// letting these two tests substitute a rejection for exactly the calls they care about.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
+const mockedRename = vi.mocked(rename);
 
 /**
  * Task 10 filesystem/temp-safety regression suite. Each test gets its own `mkdtemp`-generated
@@ -70,6 +81,41 @@ describe('Task 10 release: filesystem/temp isolation', () => {
     const parsed = JSON.parse(content) as { schemaVersion: number; snapshots: unknown[] };
     expect(parsed.schemaVersion).toBe(1);
     expect(Array.isArray(parsed.snapshots)).toBe(true);
+  });
+
+  afterEach(async () => {
+    // Restore the mocked rename export back to the real filesystem implementation so a
+    // persistent override set by one test (mockRejectedValue) never leaks into the next.
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    mockedRename.mockReset();
+    mockedRename.mockImplementation((...args: Parameters<typeof rename>) => actual.rename(...args));
+  });
+
+  it('a transient EPERM on rename (Windows AV/indexer lock) is retried until it clears', async () => {
+    const store = new SharedSnapshotStore(dir);
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const permError = Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    mockedRename
+      .mockRejectedValueOnce(permError)
+      .mockRejectedValueOnce(permError)
+      .mockImplementationOnce((...args: Parameters<typeof rename>) => actual.rename(...args));
+    await expect(store.write([])).resolves.toBeUndefined();
+    expect(mockedRename).toHaveBeenCalledTimes(3);
+  });
+
+  it('a persistent rename failure is not swallowed after the retry budget is exhausted', async () => {
+    const store = new SharedSnapshotStore(dir);
+    const permError = Object.assign(new Error('EPERM'), { code: 'EPERM' });
+    mockedRename.mockRejectedValue(permError);
+    await expect(store.write([])).rejects.toThrow('EPERM');
+  });
+
+  it('a non-transient rename error (e.g. read-only destination) fails immediately without retrying', async () => {
+    const store = new SharedSnapshotStore(dir);
+    const readOnlyError = Object.assign(new Error('EROFS'), { code: 'EROFS' });
+    mockedRename.mockRejectedValue(readOnlyError);
+    await expect(store.write([])).rejects.toThrow('EROFS');
+    expect(mockedRename).toHaveBeenCalledTimes(1);
   });
 
   it('a missing directory is created (mkdir recursive) rather than failing the write', async () => {
