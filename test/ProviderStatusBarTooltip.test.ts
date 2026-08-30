@@ -51,15 +51,16 @@ describe('ProviderStatusBarTooltip', () => {
         metadata: { fallbackIntervalSeconds: 60 },
       }),
       NOW,
+      { density: 'detailed', percentageMode: 'both', timeFormat: 'both' },
     );
 
     expect(tooltip).toContain('86% left');
     expect(tooltip).toContain('14% used');
     expect(tooltip).toContain('█████████░');
-    expect(tooltip).toContain('`█████████░` 86% left · 14% used');
+    expect(tooltip).not.toContain('`█████████░` 86% left · 14% used');
     expect(tooltip).toContain('Next fallback check: in 38s');
     expect(tooltip).toContain('Last provider event: just now');
-    expect(tooltip).toContain('Resets');
+    expect(tooltip).toContain('Reset:');
     expect(tooltip).toContain('in 5d');
     expect(tooltip).not.toContain('Next refresh:');
   });

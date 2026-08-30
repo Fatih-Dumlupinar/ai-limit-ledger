@@ -1,24 +1,19 @@
 import { normalizeToEpochMs } from '../limits/TimestampNormalizer';
-import { elapsedDuration, escapeMarkdown, formatPercent } from '../limits/RateLimitFormatter';
-import {
-  createRemainingCapacityProgress,
-  type RemainingCapacityProgress,
-  type RemainingCapacityThresholds,
-} from '../limits/RemainingCapacityProgress';
-import {
-  formatConfiguredTime,
-  getUiTextCatalog,
-  localizedProviderSourceLabel,
-  localizedRateLimitWindowLabel,
-  percentageText,
-  type UiTextCatalog,
-} from './UiTextCatalog';
+import { escapeMarkdown, formatPercent } from '../limits/RateLimitFormatter';
+import { type RemainingCapacityThresholds } from '../limits/RemainingCapacityProgress';
+import { formatConfiguredTime, getUiTextCatalog, type UiTextCatalog } from './UiTextCatalog';
 import {
   getProviderCapabilityDescriptor,
   normalizeProviderId,
+  sourceKindForSnapshot,
 } from '../providers/ProviderCapabilityContract';
 import type { ProviderId, ProviderSnapshot } from '../providers/types';
 import { localizedInsightLabel, safeUsageInsightsForSnapshot } from './SafeDashboard';
+import {
+  buildProviderPresentationSummary,
+  formatPresentedReset,
+  presentedPercentageText,
+} from './ProviderPresentation';
 
 export type ProviderRefreshMode =
   'push-with-fallback' | 'event-driven' | 'polling' | 'manual' | 'backoff' | 'not-scheduled';
@@ -118,24 +113,7 @@ function hasNumericUsage(snapshot: ProviderSnapshot): boolean {
 }
 
 function isExperimentalSource(snapshot: ProviderSnapshot): boolean {
-  const providerId = normalizeProviderId(snapshot.providerId);
-  return (
-    (providerId === 'claude' && snapshot.metadata?.accountLimitsSource === 'experimental-oauth') ||
-    (providerId === 'claude' &&
-      snapshot.metadata?.accountLimitsSource === 'last-known-good-oauth') ||
-    (providerId === 'copilot' &&
-      snapshot.metadata?.billingEndpoint === 'experimental-entitlement') ||
-    providerId === 'grok'
-  );
-}
-
-function sourceLabel(snapshot: ProviderSnapshot, catalog = getUiTextCatalog()): string {
-  const providerId = normalizeProviderId(snapshot.providerId) as ProviderId;
-  return localizedProviderSourceLabel(
-    providerId,
-    isExperimentalSource(snapshot) ? 'experimental-undocumented' : 'official',
-    catalog,
-  );
+  return sourceKindForSnapshot(snapshot.source, snapshot.metadata).startsWith('experimental');
 }
 
 function providerIdOf(snapshot: ProviderSnapshot): ProviderId | undefined {
@@ -232,16 +210,6 @@ function safeText(value: unknown): string | undefined {
   return escapeMarkdown(text);
 }
 
-function percent(value: unknown, catalog: UiTextCatalog = getUiTextCatalog()): string {
-  const result = formatPercent(finite(value));
-  return result === 'Not provided' ? catalog.notProvided : `${result}%`;
-}
-
-function progressBar(progress: RemainingCapacityProgress): string {
-  const filled = Math.round(progress.fillPercent / 10);
-  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`;
-}
-
 function dateText(
   value: number | undefined,
   now = Date.now(),
@@ -286,55 +254,6 @@ function countdown(
   if (days === 0 && hours === 0 && seconds > 0)
     parts.push(turkish ? `${seconds} sn` : `${seconds}s`);
   return turkish ? `${parts.join(' ')} içinde` : `in ${parts.join(' ')}`;
-}
-
-function windowRows(
-  snapshot: ProviderSnapshot,
-  now: number,
-  thresholds: RemainingCapacityThresholds = {},
-  timeFormat: 'locale' | 'relative' | 'absolute' | 'both' = 'both',
-  catalog: UiTextCatalog = getUiTextCatalog(),
-): string[] {
-  const seen = new Set<string>();
-  const windows = snapshot.usageWindows
-    .map((window, index) => ({ window, index }))
-    .filter(({ window }) => {
-      const key = (window.label || `Window ${window.id}`).trim().toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => {
-      const durationA = a.window.windowDurationMinutes ?? Number.MAX_SAFE_INTEGER;
-      const durationB = b.window.windowDurationMinutes ?? Number.MAX_SAFE_INTEGER;
-      return durationA - durationB || a.index - b.index;
-    });
-  return windows.map(({ window }) => {
-    const label = localizedRateLimitWindowLabel(
-      window.id,
-      window.label,
-      window.windowDurationMinutes,
-      catalog,
-    );
-    const displayLabel =
-      catalog === getUiTextCatalog('en') && (window.id === 'five-hour' || window.id === 'seven-day')
-        ? `${label} (${window.id === 'five-hour' ? '5h' : '7d'})`
-        : label;
-    const resetMs =
-      window.resetsAt === null ? null : normalizeToEpochMs(window.resetsAt, 'unix-seconds');
-    const resetCountdown =
-      resetMs === null
-        ? undefined
-        : countdown(resetMs, now, catalog.resetTimePassed, catalog, 'deadline')?.replace(
-            /^due now$/,
-            catalog.resetTimePassed,
-          );
-    const reset = `${dateText(resetMs ?? undefined, now, timeFormat, catalog) ?? catalog.notProvided}${
-      resetCountdown ? ` (${resetCountdown})` : ''
-    }`;
-    const progress = createRemainingCapacityProgress(window.usedPercent, thresholds);
-    return `| ${displayLabel} | ${percent(progress?.usedPercent, catalog)} | ${percent(progress?.remainingPercent, catalog)} | ${reset} |`;
-  });
 }
 
 function modeLines(
@@ -442,119 +361,118 @@ export function formatProviderTooltip(
   const descriptor = providerId ? getProviderCapabilityDescriptor(providerId) : undefined;
   const name = descriptor?.displayName ?? 'Provider';
   const presentation = buildProviderRefreshPresentation(snapshot, now);
-  const firstWindow = snapshot.usageWindows[0];
-  const firstWindowProgress = firstWindow
-    ? createRemainingCapacityProgress(firstWindow.usedPercent, options.thresholds)
-    : undefined;
   const catalog = getUiTextCatalog(options.language ?? 'auto');
-  // The historical detailed tooltip showed both values. The centralized setting is passed by
-  // the live registry; retaining this default keeps the pure formatter backwards compatible.
-  const percentageMode = options.percentageMode ?? 'both';
-  const percentage = firstWindowProgress
-    ? percentageText(
-        firstWindowProgress.remainingPercent,
-        firstWindowProgress.usedPercent,
-        percentageMode,
-        catalog,
-      )
-    : undefined;
-  const primary = percentage
-    ? `**${percentage}**`
-    : typeof snapshot.credits?.used === 'number'
+  const percentageMode = options.percentageMode ?? 'remaining';
+  const semantic = buildProviderPresentationSummary(snapshot, {
+    now,
+    thresholds: options.thresholds,
+    language: options.language,
+  });
+  const status = semantic.health.statusText || localizedStatus(snapshot.availability, catalog);
+  const windows = semantic.quotaWindows;
+  const timeFormat = options.timeFormat ?? 'both';
+  const creditSummary =
+    typeof snapshot.credits?.used === 'number' && Number.isFinite(snapshot.credits.used)
       ? `**${catalog.aiCredits} ${catalog.used.toLowerCase()}: ${formatPercent(snapshot.credits.used)}**`
       : `**${catalog.usageNotProvided}**`;
-  const bar = firstWindowProgress ? progressBar(firstWindowProgress) : undefined;
-  const status = localizedStatus(snapshot.availability, catalog);
+  const resetFormat = (compact: boolean) =>
+    compact && timeFormat !== 'absolute' && timeFormat !== 'locale' ? 'relative' : timeFormat;
+  const quotaLines = (limit: number, compact: boolean): string[] => {
+    const selected = windows.slice(0, limit);
+    if (selected.length === 0) return [creditSummary];
+    return selected.flatMap((window) => {
+      const percentage = presentedPercentageText(window, percentageMode, catalog);
+      const bar =
+        !compact && window.fillPercentage !== undefined
+          ? `\`${'█'.repeat(Math.round(window.fillPercentage / 10))}${'░'.repeat(10 - Math.round(window.fillPercentage / 10))}\``
+          : undefined;
+      const reset = window.reset
+        ? `${catalog.reset}: ${formatPresentedReset(window.reset, resetFormat(compact), catalog)}`
+        : `${catalog.reset}: ${catalog.notProvided}`;
+      const statusLine =
+        window.severity === 'critical'
+          ? catalog.critical
+          : window.severity === 'warning'
+            ? catalog.warning
+            : undefined;
+      return compact
+        ? [
+            `**${escapeMarkdown(window.label)}**`,
+            `${percentage ? `**${percentage}**` : `*${catalog.numericUsageUnavailable}*`} · ${escapeMarkdown(reset)}`,
+            ...(statusLine ? [`_${escapeMarkdown(statusLine)}_`] : []),
+          ]
+        : [
+            `**${escapeMarkdown(window.label)}**`,
+            ...(bar ? [bar] : []),
+            percentage ? `**${percentage}**` : `*${catalog.numericUsageUnavailable}*`,
+            escapeMarkdown(reset),
+            ...(statusLine ? [`_${escapeMarkdown(statusLine)}_`] : []),
+            '',
+          ];
+    });
+  };
+  const freshness = semantic.freshness;
+  const issue = semantic.health.issueText ?? snapshot.warning ?? snapshot.error;
   if (options.density === 'compact') {
-    const reset = firstWindow?.resetsAt === null ? undefined : firstWindow?.resetsAt;
-    const resetText =
-      reset === undefined
-        ? catalog.notProvided
-        : (dateText(
-            normalizeToEpochMs(reset, 'unix-seconds') ?? undefined,
-            now,
-            options.timeFormat ?? 'both',
-            catalog,
-            'deadline',
-          ) ?? catalog.notProvided);
     return [
       `### ${name}`,
       '',
-      primary,
-      `**${catalog.reset}:** ${resetText}`,
-      `**${catalog.nextAutomaticCheck}:** ${countdown(presentation.nextScheduledRefreshAt, now, catalog.now, catalog, 'future-target') ?? catalog.notProvided}`,
       `**${catalog.status}:** ${status}`,
+      '',
+      ...quotaLines(2, true),
+      '',
+      `**${catalog.updated}:** ${freshness.summaryText}`,
+      ...(issue ? ['', `> ${escapeMarkdown(issue)}`] : []),
+      ...(freshness.state !== 'fresh'
+        ? [`**${catalog.dataState}:** ${catalog.lastKnownGood}`]
+        : []),
     ].join('\n');
   }
-  const lines = [`### ${name}`, '', `**${catalog.status}:** ${status}`, '', primary];
-  if (snapshot.stale) lines.push('', `**${catalog.dataMayBeStale}**`);
-  if (bar && firstWindowProgress) {
-    lines.push(
-      '',
-      `\`${bar}\` ${percentageText(firstWindowProgress.remainingPercent, firstWindowProgress.usedPercent, percentageMode, catalog)}`,
-    );
-    if (firstWindowProgress.statusText) {
-      const progressStatus =
-        firstWindowProgress.severity === 'critical'
-          ? catalog.critical
-          : firstWindowProgress.severity === 'warning'
-            ? catalog.warning
-            : firstWindowProgress.statusText;
-      lines.push('', `**${escapeMarkdown(progressStatus)}**`);
-    }
-  }
-  const rows = windowRows(snapshot, now, options.thresholds, options.timeFormat ?? 'both', catalog);
-  if (rows.length) {
-    lines.push(
-      '',
-      `| ${catalog.usageWindow} | ${catalog.used} | ${catalog.left} | ${catalog.resets} |`,
-      '|---|---:|---:|---|',
-      ...rows,
-    );
-  }
-  const insightRows = safeUsageInsightsForSnapshot(snapshot, now, options.language ?? 'auto').slice(
-    0,
-    3,
-  );
+  const lines = [`### ${name}`, '', `**${catalog.status}:** ${status}`, ''];
+  if (issue) lines.push(`> ${escapeMarkdown(issue)}`, '');
+  lines.push(...quotaLines(windows.length || 1, false));
+  const plan = safeText(snapshot.plan);
+  const insightRows = safeUsageInsightsForSnapshot(snapshot, now, options.language ?? 'auto')
+    .filter((insight) => {
+      if (insight.label === 'planType' && plan) return false;
+      if (insight.label === 'rateLimits') return false;
+      if (insight.label === 'resetAt' && windows.some((window) => window.reset)) return false;
+      if (insight.label === 'aiCreditsRemainingPercent' && windows.length > 0) return false;
+      return true;
+    })
+    .slice(0, 3);
   if (insightRows.length) {
     lines.push(
       '',
       `**${providerId === 'claude' ? catalog.latestObservedCliSession : catalog.usageInsights}:**`,
-      ...insightRows.map(
-        (insight) =>
-          `- **${escapeMarkdown(localizedInsightLabel(insight.label, catalog))}:** ${escapeMarkdown(insight.value)} _(${escapeMarkdown(insight.sourceLabel)})_`,
-      ),
+      ...insightRows.map((insight) => {
+        const fieldSource =
+          insight.sourceKind === semantic.sourceKind
+            ? ''
+            : ` _(${escapeMarkdown(insight.sourceLabel)})_`;
+        return `- **${escapeMarkdown(localizedInsightLabel(insight.label, catalog))}:** ${escapeMarkdown(insight.value)}${fieldSource}`;
+      }),
     );
   }
-  const plan = safeText(snapshot.plan);
   const model = safeText(snapshot.metadata?.modelName ?? snapshot.metadata?.modelId);
   if (plan) lines.push('', `**${catalog.plan}:** ${plan}`);
   if (model) lines.push(`**${catalog.model}:** ${model}`);
-  lines.push('', `**${catalog.dataFreshness}**`);
-  if (presentation.lastCheckAt !== undefined)
+  if (freshness.state === 'fresh') {
+    lines.push('', `**${catalog.dataFreshness}:** ${freshness.summaryText}`);
+  } else {
     lines.push(
-      `- ${catalog.lastCheck}: ${formatConfiguredTime(presentation.lastCheckAt, now, 'relative', catalog, 'past-event')}`,
+      '',
+      `**${catalog.dataFreshness}**`,
+      ...freshness.detailLines.map((line) => `- ${line.label}: ${line.value}`),
     );
-  if (presentation.lastSuccessfulUpdateAt !== undefined)
-    lines.push(
-      `- ${catalog.lastSuccessfulUpdate}: ${formatConfiguredTime(presentation.lastSuccessfulUpdateAt, now, 'relative', catalog, 'past-event')}`,
-    );
-  if (presentation.lastProviderEventAt !== undefined)
-    lines.push(
-      `- ${catalog.lastProviderEvent}: ${formatConfiguredTime(presentation.lastProviderEventAt, now, 'relative', catalog, 'past-event')}`,
-    );
-  if (presentation.snapshotAgeMs !== undefined)
-    lines.push(
-      `- ${catalog.snapshotAge}: ${elapsedDuration(now - presentation.snapshotAgeMs, now)}`,
-    );
-  if (snapshot.stale || presentation.mode === 'backoff')
     lines.push(`- ${catalog.dataState}: ${catalog.lastKnownGood}`);
+  }
   lines.push(
     '',
     `**${catalog.refreshSection}**`,
-    ...modeLines(snapshot, presentation, now, options.timeFormat ?? 'both', catalog),
+    ...modeLines(snapshot, presentation, now, timeFormat, catalog),
   );
-  lines.push('', `_${catalog.source}: ${sourceLabel(snapshot, catalog)}_`);
+  lines.push('', `_${catalog.source}: ${semantic.provenance[0]?.label ?? catalog.notProvided}_`);
   if (isExperimentalSource(snapshot)) lines.push(`_${catalog.experimental}_`);
   return lines.join('\n');
 }

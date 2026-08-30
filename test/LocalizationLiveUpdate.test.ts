@@ -82,8 +82,8 @@ describe('live runtime localization surfaces', () => {
   });
 
   it.each([
-    ['compact', 'kullanılan'],
-    ['detailed', 'Son kontrol'],
+    ['compact', 'kaldı'],
+    ['detailed', 'Veri güncelliği'],
   ] as const)('rebuilds the %s tooltip from cached data in Turkish', (density, expected) => {
     const tooltip = formatProviderTooltip(snapshot(), NOW, { language: 'tr', density });
     expect(tooltip).toContain(expected);
