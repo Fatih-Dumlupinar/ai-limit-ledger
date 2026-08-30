@@ -3,8 +3,9 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { ProviderSnapshot } from '../providers/types';
 
-const RENAME_MAX_ATTEMPTS = 5;
-const RENAME_BASE_DELAY_MS = 10;
+const RENAME_MAX_ATTEMPTS = 10;
+const RENAME_BASE_DELAY_MS = 15;
+const RENAME_MAX_DELAY_MS = 200;
 
 function isTransientRenameError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
@@ -20,6 +21,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function backoffDelayMs(attempt: number): number {
+  const exponential = Math.min(RENAME_MAX_DELAY_MS, RENAME_BASE_DELAY_MS * 2 ** (attempt - 1));
+  // Jitter keeps many concurrent writers that all failed on the same tick from waking up and
+  // retrying in lockstep, which would just reproduce the same collision on the next attempt.
+  return exponential + Math.random() * exponential * 0.5;
+}
+
 async function renameWithBoundedRetry(from: string, to: string): Promise<void> {
   for (let attempt = 1; attempt <= RENAME_MAX_ATTEMPTS; attempt++) {
     try {
@@ -27,7 +35,7 @@ async function renameWithBoundedRetry(from: string, to: string): Promise<void> {
       return;
     } catch (error) {
       if (attempt === RENAME_MAX_ATTEMPTS || !isTransientRenameError(error)) throw error;
-      await delay(RENAME_BASE_DELAY_MS * attempt);
+      await delay(backoffDelayMs(attempt));
     }
   }
 }
