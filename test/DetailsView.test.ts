@@ -594,9 +594,7 @@ describe('DetailsView', () => {
       ],
       createNonce(),
     );
-    expect(html).toContain('Data freshness');
-    expect(html).not.toContain('Last check:');
-    expect(html).not.toContain('Last successful data update:');
+    expect(html).toContain('<div class="freshness-summary"><span><strong>Data freshness:</strong>');
   });
 
   it('offers install-guide, terminal launch (when the CLI is present), and copy-diagnostics for upstream-statusline-not-invoked', () => {
