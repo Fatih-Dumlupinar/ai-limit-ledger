@@ -20,6 +20,8 @@ debug.log
 .node-version
 *-audit.json
 *-tree.json
+privacy-audit-report*.json
+privacy-report*.json
 scripts/**
 docs/CI-SECURITY-DESIGN.md
 docs/DEPENDENCY-RISK-REGISTER.md
@@ -31,6 +33,7 @@ docs/MARKETPLACE-PREFLIGHT.md
 docs/MARKETPLACE-SCREENSHOT-RUNBOOK.md
 assets/marketplace/**
 docs/RELEASE-PROCESS.md
+docs/PRIVACY-AUDIT.md
 docs/FIRST-MARKETPLACE-RELEASE-*.md
 docs/INSTALLATION-MIGRATION-*.md
 docs/ROLLBACK.md

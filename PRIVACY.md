@@ -1,5 +1,30 @@
 # AI Limit Ledger Privacy
 
+## Repository privacy audit (Task 14.2)
+
+No change to what the extension reads, stores, or transmits. This task adds a permanent audit of the
+_project_, not of the user: `scripts/privacy-audit.mjs` (`npm run audit:privacy`) checks whether the
+tracked source tree, the reachable git history, or a packaged VSIX carries anything identifying the
+person or machine that built it — a user-profile path, a hostname, a private IP or MAC address, a
+source map pointing at a build directory, a VS Code profile path, PNG metadata — before a release
+candidate can be packaged, attested, or uploaded as an artifact.
+
+It is deliberately narrow about what it will read. It never touches a credential store, VS Code
+SecretStorage, a browser session, `.env` contents, or a raw provider payload; it never scans outside
+the repository, never walks the user's home directory or the machine at large, and refuses to follow
+a symlink whose real path escapes the repository root. It is offline and read-only.
+
+It is also careful about what it will _say_. A matched value is never printed — not to a terminal,
+a JSON report, or a GitHub Actions job summary. Each finding is reported as a pattern id, a
+location, a structural mask (`C:\Users\<redacted>\...`), and the first 12 hex characters of the
+value's SHA-256; the raw value is discarded at match time.
+
+The audit separates the project's **intentional public identity** — the owner's GitHub handle, the
+Marketplace publisher id, the GitHub-issued `users.noreply.github.com` commit address, and the
+canonical project URLs, all published on purpose — from data that would be leaked unintentionally,
+and reports the two separately rather than pretending the former does not exist. See
+`docs/PRIVACY-AUDIT.md`.
+
 ## Marketplace listing preparation (Task 13)
 
 No change to what data the extension reads, stores, or transmits. This task changes only the

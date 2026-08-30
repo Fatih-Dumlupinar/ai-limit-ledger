@@ -92,16 +92,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Since Task 14.2 a candidate can be produced two ways — automatically by a version bump
+      # landing on main, or by a manual dispatch — so the promotable set is an explicit two-value
+      # allowlist rather than a single equality. It is not widened beyond that: a candidate built by
+      # any other event (a pull_request, a workflow_run chain, a repository_dispatch) is still
+      # refused. The head-branch check added alongside it is a genuine tightening — the previous
+      # single-event check never verified which branch the candidate was built from, and the
+      # ancestry proof below only runs against the *input* SHA.
       - name: Verify candidate run belongs to this repository and succeeded
         run: |
           set -euo pipefail
           workflow_name="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json workflowName --jq .workflowName)"
           event_name="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json event --jq .event)"
+          head_branch="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json headBranch --jq .headBranch)"
           conclusion="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)"
           head_sha="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)"
 
           [ "$workflow_name" = "Release Candidate" ] || { echo "run $RUN_ID is not a Release Candidate run" >&2; exit 1; }
-          [ "$event_name" = "workflow_dispatch" ] || { echo "run $RUN_ID was not triggered by workflow_dispatch" >&2; exit 1; }
+          case "$event_name" in
+            push|workflow_dispatch) ;;
+            *) echo "run $RUN_ID was triggered by $event_name, which cannot produce a promotable candidate" >&2; exit 1 ;;
+          esac
+          [ "$head_branch" = "main" ] || { echo "run $RUN_ID was built from $head_branch, not main" >&2; exit 1; }
           [ "$conclusion" = "success" ] || { echo "run $RUN_ID did not conclude successfully (conclusion: $conclusion)" >&2; exit 1; }
           [ "$head_sha" = "$COMMIT_SHA" ] || { echo "run $RUN_ID head SHA ($head_sha) does not match commit_sha input" >&2; exit 1; }
 

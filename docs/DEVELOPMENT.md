@@ -258,10 +258,14 @@ The full procedure lives in [`RELEASE-PROCESS.md`](RELEASE-PROCESS.md). The shap
 
 1. **Version bump on a branch** — `npm version <x.y.z> --no-git-tag-version`, add the `CHANGELOG.md`
    section and `docs/RELEASE-NOTES-<x.y.z>.md`, open a PR, merge to `main`.
-2. **Release Candidate** — dispatch the `Release Candidate` workflow from `main` with the exact
-   version. It rebuilds and re-audits the exact `main` commit, packages the VSIX, and produces a
-   SHA-256 checksum, an SBOM, a release manifest, and a build-provenance attestation as one
-   retention-bounded artifact. It creates no ref, no release, and uploads nothing anywhere.
+2. **Release Candidate** — starts **automatically** when step 1's merge lands a changed version on
+   `main`. A push that touches `package.json`/`package-lock.json` without changing the version
+   produces a green run that explicitly skips and builds nothing; to retry after a skip, or to
+   rebuild an expired candidate, dispatch the workflow manually from `main` with the exact version.
+   Either way it rebuilds and re-audits the triggering `main` commit, runs the privacy audit over
+   the source tree, over git history, and over the built package, then produces the VSIX, a SHA-256
+   checksum, an SBOM, a release manifest, and a build-provenance attestation as one seven-day
+   artifact. It creates no ref, no release, and uploads nothing anywhere.
 3. **Manual Marketplace upload** — the repository owner downloads the candidate artifact, verifies
    the SHA-256, and uploads the VSIX **by hand** through the publisher management page. No
    workflow, token, or PAT is involved: there is no `VSCE_PAT` in this repository and no workflow
@@ -287,6 +291,16 @@ Non-negotiable, and enforced by tests and the release audit:
 - Nothing written by a development session escapes `.tmp/`, which is gitignored and excluded from
   the VSIX.
 - No absolute user path, email address, account ID, or other personal identifier appears in
-  source, tests, fixtures, documentation, or a packaged artifact.
+  source, tests, fixtures, documentation, or a packaged artifact. `npm run audit:privacy` checks
+  this for you across the tracked tree, `-- --history` across every reachable commit, and
+  `-- --vsix <file>` across a built package; all three gate the Release Candidate workflow. It
+  reports a pattern id, a location, a mask, and a fingerprint — never the matched value. See
+  [`PRIVACY-AUDIT.md`](PRIVACY-AUDIT.md).
+- A fixture needing a sensitive-looking value must put the synthetic marker in the part that
+  matters. For a path that is the **account segment**: `C:\Users\fixture\...` and `/home/test/...`
+  are recognised as fixtures, but a realistic account name is a finding no matter what the rest of
+  the path says. If a fixture genuinely cannot be made to look synthetic, add a narrow entry to
+  `scripts/privacy-allowlist.json` naming one pattern id, one exact path, and a written reason —
+  never the value itself.
 - The extension makes no model/inference call to read usage, and adds no telemetry — see
   [`PRIVACY.md`](../PRIVACY.md).

@@ -37,6 +37,12 @@ npm-debug.log*
 audit-raw.json
 deps-tree.json
 
+# Privacy audit reports (Task 14.2). The reports are redacted by construction, but they are still a
+# per-run artifact of a developer's or CI runner's working tree — they are read, not archived, and
+# must never be committed or packaged.
+privacy-audit-report*.json
+privacy-report*.json
+
 # Provider-specific local snapshots/caches (never committed; user-machine state)
 .claude-usage-cache/
 

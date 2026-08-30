@@ -23,7 +23,11 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { inflateRawSync } from 'node:zlib';
+import { readZipEntries, readZipEntryContent, unsafeZipEntryReason } from './lib/zip-reader.mjs';
+// The packaged-content personal-data check reuses the privacy audit's classifier rather than
+// re-deriving "is this a real account name or a fixture" a second time (Task 14.2). Sharing the
+// classifier is what keeps the two audits from disagreeing about the same file.
+import { classifyMatch, fingerprint, maskValue } from './lib/privacy-patterns.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -350,53 +354,10 @@ function checkLocalizationParity() {
 // 6. Minimal pure-Node ZIP reader for VSIX content auditing (no dependency)
 // ---------------------------------------------------------------------------
 
-export function readZipEntries(buffer) {
-  const EOCD_SIG = 0x06054b50;
-  let eocdOffset = -1;
-  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 22 - 65535); i--) {
-    if (buffer.readUInt32LE(i) === EOCD_SIG) {
-      eocdOffset = i;
-      break;
-    }
-  }
-  if (eocdOffset === -1)
-    throw new Error('Not a valid ZIP/VSIX: End Of Central Directory not found');
-
-  const cdEntryCount = buffer.readUInt16LE(eocdOffset + 10);
-  const cdOffset = buffer.readUInt32LE(eocdOffset + 16);
-
-  const entries = [];
-  let offset = cdOffset;
-  const CD_SIG = 0x02014b50;
-  for (let i = 0; i < cdEntryCount; i++) {
-    if (buffer.readUInt32LE(offset) !== CD_SIG) break;
-    const method = buffer.readUInt16LE(offset + 10);
-    const compressedSize = buffer.readUInt32LE(offset + 20);
-    const uncompressedSize = buffer.readUInt32LE(offset + 24);
-    const fileNameLength = buffer.readUInt16LE(offset + 28);
-    const extraLength = buffer.readUInt16LE(offset + 30);
-    const commentLength = buffer.readUInt16LE(offset + 32);
-    const localHeaderOffset = buffer.readUInt32LE(offset + 42);
-    const fileName = buffer.toString('utf8', offset + 46, offset + 46 + fileNameLength);
-    entries.push({ fileName, method, compressedSize, uncompressedSize, localHeaderOffset });
-    offset += 46 + fileNameLength + extraLength + commentLength;
-  }
-  return entries;
-}
-
-export function readZipEntryContent(buffer, entry) {
-  const LOCAL_SIG = 0x04034b50;
-  const off = entry.localHeaderOffset;
-  if (buffer.readUInt32LE(off) !== LOCAL_SIG)
-    throw new Error(`Bad local header for ${entry.fileName}`);
-  const fileNameLength = buffer.readUInt16LE(off + 26);
-  const extraLength = buffer.readUInt16LE(off + 28);
-  const dataStart = off + 30 + fileNameLength + extraLength;
-  const compressed = buffer.subarray(dataStart, dataStart + entry.compressedSize);
-  if (entry.method === 0) return compressed;
-  if (entry.method === 8) return inflateRawSync(compressed);
-  throw new Error(`Unsupported ZIP compression method ${entry.method} for ${entry.fileName}`);
-}
+// The reader itself now lives in scripts/lib/zip-reader.mjs, shared with the privacy audit so both
+// auditors read a VSIX through one implementation instead of two that can drift apart (Task 14.2).
+// It is re-exported here unchanged, so every existing importer of these two names keeps working.
+export { readZipEntries, readZipEntryContent, unsafeZipEntryReason };
 
 // ---------------------------------------------------------------------------
 // 7. VSIX content audit (only runs when a .vsix path is given)
@@ -450,6 +411,53 @@ export const VSIX_DENYLIST_PATTERNS = [
   /^extension\/docs\/INSTALLATION-MIGRATION-/,
   /^extension\/docs\/ROLLBACK\.md$/,
   /^extension\/docs\/RELEASE-NOTES-/,
+  /^extension\/docs\/PRIVACY-AUDIT\.md$/,
+  // Task 14.2 — privacy audit outputs and local machine state. A privacy report is redacted by
+  // construction, but it is still a per-run artifact of somebody's working tree and has no business
+  // inside an installable package; the log and VS Code profile patterns cover the other things that
+  // accumulate in a development checkout and would carry machine-specific content if shipped.
+  /(^|\/)privacy-audit-report[^/]*\.json$/,
+  /(^|\/)privacy-report[^/]*\.json$/,
+  /\.log$/i,
+  /(^|\/)npm-debug\.log/i,
+  /(^|\/)\.vscode-test\//,
+  /(^|\/)User\/(?:globalStorage|workspaceStorage|History)\//,
+  /(^|\/)\.env(?:\.[^/]*)?$/,
+  /(^|\/)\.npmrc$/,
+  /(^|\/)\.netrc$/,
+  /\.pem$/,
+  /\.key$/,
+  /(^|\/)id_(?:rsa|ed25519|ecdsa)(?:\.pub)?$/,
+];
+
+/**
+ * Personal-data patterns that must never appear inside a packaged VSIX — either in an entry name or
+ * in a text entry's content.
+ *
+ * This overlaps `ABSOLUTE_PATH_PATTERNS` on purpose but goes further: a Marketplace package is the
+ * one artifact strangers download, so the packaged-content check is the strictest one in the
+ * repository. Unlike the source-tree scan there is no "likely-fixture" softening here — a
+ * user-profile path, a UNC share, a MAC address, or a source map pointing at a build directory is a
+ * hard failure in a package regardless of what the surrounding line says.
+ */
+export const VSIX_PERSONAL_DATA_PATTERNS = [
+  { name: 'windows-user-path', pattern: /[A-Za-z]:\\{1,2}Users\\{1,2}[A-Za-z0-9._~-]+/g },
+  { name: 'macos-home-path', pattern: /\/Users\/[A-Za-z0-9._-]+/g },
+  { name: 'linux-home-path', pattern: /\/home\/[A-Za-z0-9._-]+/g },
+  {
+    name: 'unc-share-path',
+    pattern: /(?<![A-Za-z0-9\\])\\\\[A-Za-z0-9._-]{2,}\\[A-Za-z0-9._$-]+/g,
+  },
+  { name: 'mac-address', pattern: /\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b/g },
+  {
+    name: 'source-map-absolute-path',
+    pattern: /"(?:sources|sourceRoot)"\s*:\s*(?:\[\s*)?"(?:[A-Za-z]:[\\/]|\/(?:home|Users)\/)/g,
+  },
+  {
+    name: 'vscode-profile-path',
+    pattern:
+      /AppData[\\/]{1,2}Roaming[\\/]{1,2}Code|\.config\/Code\/User|Library\/Application Support\/Code/g,
+  },
 ];
 
 // vsce packages README/CHANGELOG/LICENSE under its own Marketplace-convention names/casing
@@ -628,8 +636,112 @@ function checkVsixContent(vsixPath) {
     );
   }
 
+  checkVsixEntryPathSafety(entries);
+  checkVsixPersonalData(buffer, entries);
+
   return { buffer, entries, sizeBytes };
 }
+
+/**
+ * Rejects any packaged entry whose name would escape the extraction root.
+ *
+ * vsce would not produce such a name, which is exactly why it is worth asserting: if one ever
+ * appears, the package was not built by the toolchain we think built it.
+ */
+function checkVsixEntryPathSafety(entries) {
+  const unsafe = [];
+  for (const entry of entries) {
+    const reason = unsafeZipEntryReason(entry.fileName);
+    // The entry name is reported by fingerprint, not by value, for the same reason every other
+    // finding in this file is: a hostile name is itself untrusted content.
+    if (reason) unsafe.push(`entry ${fingerprint(entry.fileName)}: ${reason}`);
+  }
+  if (unsafe.length === 0) {
+    record(
+      'vsix-entry-path-safety',
+      'pass',
+      'Every VSIX entry name is a safe relative path (no traversal, drive letter, UNC, or control character).',
+    );
+  } else {
+    record(
+      'vsix-entry-path-safety',
+      'fail',
+      `${unsafe.length} VSIX entry name(s) would escape the extraction root`,
+      unsafe.slice(0, 25),
+    );
+  }
+}
+
+/**
+ * Scans packaged entry names and text content for personal/machine data.
+ *
+ * Findings are reported as pattern name, location, mask, and fingerprint only — never the matched
+ * text. Classification is delegated to the shared privacy classifier, so a documented fixture path
+ * (`C:\Users\fixture\...` in a contributor doc) is recognized as such while a real account name
+ * fails the audit.
+ */
+function checkVsixPersonalData(buffer, entries) {
+  const findings = [];
+  const inspect = (text, location) => {
+    for (const { name, pattern } of VSIX_PERSONAL_DATA_PATTERNS) {
+      const expression = new RegExp(pattern.source, pattern.flags);
+      let match;
+      while ((match = expression.exec(text)) !== null) {
+        if (match[0].length === 0) {
+          expression.lastIndex += 1;
+          continue;
+        }
+        const patternId = VSIX_PATTERN_TO_PRIVACY_ID[name] ?? name;
+        const { classification } = classifyMatch(patternId, match[0]);
+        if (classification !== 'finding') continue;
+        findings.push(
+          `${location} [${name}] ${maskValue(patternId, match[0])} fingerprint:${fingerprint(match[0])}`,
+        );
+      }
+    }
+  };
+
+  for (const entry of entries) {
+    inspect(entry.fileName, `entry-name ${entry.fileName}`);
+    if (!isLikelyTextFile(entry.fileName) || entry.uncompressedSize > 2 * 1024 * 1024) continue;
+    let text;
+    try {
+      text = readZipEntryContent(buffer, entry).toString('utf8');
+    } catch {
+      continue;
+    }
+    text.split(/\r?\n/).forEach((line, index) => {
+      if (line.length > 8192) return;
+      inspect(line, `${entry.fileName}:${index + 1}`);
+    });
+  }
+
+  if (findings.length === 0) {
+    record(
+      'vsix-personal-data',
+      'pass',
+      'No personal or machine-specific data (user paths, UNC shares, MAC addresses, source-map build paths, VS Code profile paths) in packaged names or text.',
+    );
+  } else {
+    record(
+      'vsix-personal-data',
+      'fail',
+      `${findings.length} personal-data match(es) inside the packaged VSIX`,
+      findings.slice(0, 25),
+    );
+  }
+}
+
+/** Maps this file's pattern names onto the shared privacy pattern ids used for classification. */
+const VSIX_PATTERN_TO_PRIVACY_ID = {
+  'windows-user-path': 'WINDOWS_USER_PATH',
+  'macos-home-path': 'MACOS_HOME_PATH',
+  'linux-home-path': 'LINUX_HOME_PATH',
+  'unc-share-path': 'UNC_PATH',
+  'mac-address': 'MAC_ADDRESS',
+  'source-map-absolute-path': 'SOURCE_MAP_ABSOLUTE_PATH',
+  'vscode-profile-path': 'VSCODE_PROFILE_PATH',
+};
 
 // ---------------------------------------------------------------------------
 // 8. Hash reporting (informational — used by the manual verification step,

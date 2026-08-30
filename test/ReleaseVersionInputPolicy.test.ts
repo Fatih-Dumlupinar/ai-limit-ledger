@@ -117,7 +117,12 @@ describe('Task 14.1: release-candidate.yml is version-generic', () => {
     const validationIndex = candidate.indexOf(STRICT_SEMVER_SHELL_PATTERN);
     // Nothing may consume the version before it has been validated.
     expect(validationIndex).toBeGreaterThan(-1);
-    expect(candidate.indexOf('RELEASE_VERSION=$INPUT_VERSION')).toBeGreaterThan(validationIndex);
+    // Task 14.2 moved the gate into the resolve job, which publishes the version as a job output
+    // only after it has passed. The invariant is unchanged: the version is validated before any
+    // step consumes it, whether it arrived from a dispatch input or from package.json on a push.
+    expect(candidate.indexOf('echo "version=$new_version" >> "$GITHUB_OUTPUT"')).toBeGreaterThan(
+      validationIndex,
+    );
     expect(candidate.indexOf('docs/RELEASE-NOTES-${RELEASE_VERSION}.md')).toBeGreaterThan(
       validationIndex,
     );

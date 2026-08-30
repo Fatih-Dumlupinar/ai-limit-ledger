@@ -1,0 +1,32 @@
+[
+  {
+    "patternId": "PRIVATE_KEY_BLOCK",
+    "path": "test/ReleaseAudit.test.ts",
+    "reason": "Historical revisions of this file carried the literal PEM banner as a fixture proving release-audit detects it; the banner alone is a format marker with no key material after it."
+  },
+  {
+    "patternId": "GITHUB_TOKEN",
+    "path": "test/ReleaseAudit.test.ts",
+    "reason": "Synthetic token-shaped fixtures asserting the credential pattern set fires and the fixture-marker allowlist does not; the same file and values .gitleaks.toml already allowlists."
+  },
+  {
+    "patternId": "AUTHORIZATION_HEADER",
+    "path": "test/ReleaseAudit.test.ts",
+    "reason": "Fixture asserting the Bearer-token pattern fires; the value is the universally published JWT header segment for {alg:HS256,typ:JWT} with no payload or signature."
+  },
+  {
+    "patternId": "AUTHORIZATION_HEADER",
+    "path": "test/GrokCliProxyTransport.test.ts",
+    "reason": "Asserts the exact Authorization header the Grok proxy transport builds. The credential is the literal string 'secret-token', a hand-written placeholder that never authenticates anything."
+  },
+  {
+    "patternId": "PERSONAL_EMAIL",
+    "path": "test/ProviderLinkRegistry.test.ts",
+    "reason": "Negative test proving validateProviderLinkUrl rejects a URL carrying inline credentials; the 'user:pass@' userinfo makes the host look like an email local part to the scanner."
+  },
+  {
+    "patternId": "PASSWORD_IN_URL",
+    "path": "test/ProviderLinkRegistry.test.ts",
+    "reason": "Same negative test: a credential-bearing URL must appear literally in the source for the rejection to be asserted at all, and the value is the placeholder pair user/pass."
+  }
+]

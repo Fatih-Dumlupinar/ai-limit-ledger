@@ -113,10 +113,31 @@ export const FORBIDDEN_PUBLISH_CREDENTIAL_PATTERNS = [
   { name: 'Azure federated login', pattern: /azure\/login|azure-credentials|managed[-_]identity/i },
 ];
 
-// These two release workflows are manually dispatched only — never on pull_request/push/schedule
-// — so they are checked against an exact single-trigger allowlist, the same way
-// dependency-review.yml is restricted to pull_request only (see validateTriggers).
-export const WORKFLOW_DISPATCH_ONLY_WORKFLOWS = ['release-candidate.yml', 'finalize-release.yml'];
+/**
+ * The two workflows that carry release machinery, and are therefore held to the release-specific
+ * security rules in `validateReleaseWorkflowSecurity` regardless of how they are triggered.
+ */
+export const RELEASE_WORKFLOWS = ['release-candidate.yml', 'finalize-release.yml'];
+
+/**
+ * Finalize Release remains manually dispatched only — never on pull_request/push/schedule — and is
+ * checked against an exact single-trigger allowlist, the same way dependency-review.yml is
+ * restricted to pull_request only (see validateTriggers).
+ *
+ * Task 14.2 deliberately removed `release-candidate.yml` from this list: building a candidate is a
+ * read-only, non-publishing operation, so automating it on a version bump costs nothing in
+ * privilege. Finalizing — the step that creates a ref and a public GitHub Release — stays manual
+ * and environment-gated, which is where the human decision actually belongs. The candidate's own
+ * trigger set is pinned exactly by `RELEASE_CANDIDATE_TRIGGERS` below, so "dispatch-only" being
+ * relaxed cannot silently widen into "runs on anything".
+ */
+export const WORKFLOW_DISPATCH_ONLY_WORKFLOWS = ['finalize-release.yml'];
+
+/** The exact, complete trigger set release-candidate.yml is allowed to declare. */
+export const RELEASE_CANDIDATE_TRIGGERS = ['push', 'workflow_dispatch'];
+
+/** The manifest files whose change may start an automatic candidate. */
+export const RELEASE_CANDIDATE_PATH_FILTER = ['package.json', 'package-lock.json'];
 
 function lineIndent(raw) {
   const match = raw.match(/^ */);
@@ -517,10 +538,19 @@ function validateCommonWorkflow(file, document, errors) {
       }
     }
   }
-  // fetch-depth: 0 (full history) is reserved for the two workflows that structurally need it:
-  // the secret scanner (must scan every historical commit) and finalize-release.yml (must prove
-  // the candidate commit is an ancestor of main via `git merge-base`, which needs real history).
-  const FETCH_DEPTH_ZERO_ALLOWLIST = new Set(['secret-scan.yml', 'finalize-release.yml']);
+  // fetch-depth: 0 (full history) is reserved for the workflows that structurally need it: the
+  // secret scanner (must scan every historical commit), finalize-release.yml (must prove the
+  // candidate commit is an ancestor of main via `git merge-base`, which needs real history), and —
+  // since Task 14.2 — release-candidate.yml, for two reasons that both genuinely require it: the
+  // privacy audit's `--history` gate walks every reachable commit exactly like the secret scanner,
+  // and the automatic trigger must read package.json as it stood at the previous main tip in order
+  // to prove the version actually changed. A shallow clone would make both silently vacuous, which
+  // is worse than not running them.
+  const FETCH_DEPTH_ZERO_ALLOWLIST = new Set([
+    'secret-scan.yml',
+    'finalize-release.yml',
+    'release-candidate.yml',
+  ]);
   for (const location of document.locations.filter((item) => item.key === 'fetch-depth')) {
     if (!FETCH_DEPTH_ZERO_ALLOWLIST.has(file) || location.value !== 0)
       issue(
@@ -530,10 +560,16 @@ function validateCommonWorkflow(file, document, errors) {
         location.line,
       );
   }
-  // Retention budgets differ deliberately by artifact purpose: short-lived CI/debug artifacts
-  // stay at 1-7 days, while a release-candidate artifact must survive long enough for a human to
-  // complete the manual Marketplace upload and approve finalize-release (14-30 days).
-  const RETENTION_RANGE = file === 'release-candidate.yml' ? [14, 30] : [1, 7];
+  // Every artifact in this repository now retains for at most seven days.
+  //
+  // Task 14 gave the release candidate a 14-30 day band on the assumption that a candidate might
+  // sit unpromoted for weeks. Task 14.2 makes candidates cheap and automatic — a bump on main
+  // produces one without anyone asking — so the reason to keep them around evaporated: the manual
+  // Marketplace upload plus Finalize Release is a same-week activity, and a candidate that does
+  // expire is not lost, because dispatching the workflow rebuilds it deterministically from the
+  // same commit. Holding an unpromoted, downloadable build artifact for a month is retained risk
+  // with no matching benefit, so the band is now a flat seven days everywhere.
+  const RETENTION_RANGE = [1, 7];
   for (const location of document.locations.filter((item) => item.key === 'retention-days')) {
     const [min, max] = RETENTION_RANGE;
     if (typeof location.value !== 'number' || location.value > max || location.value < min)
@@ -590,6 +626,47 @@ function validateTriggers(file, document, errors) {
       Object.keys(trigger).length !== 1
     )
       issue(errors, file, 'Dependency Review must trigger only on pull_request');
+  } else if (file === 'release-candidate.yml') {
+    // Exactly two triggers, no more: a push to main touching a version-bearing manifest, and a
+    // manual dispatch. Anything else — pull_request, schedule, workflow_run, repository_dispatch —
+    // would either build a candidate from untrusted code or chain release stages together.
+    const declared = trigger ? Object.keys(trigger).sort() : [];
+    if (declared.join(',') !== [...RELEASE_CANDIDATE_TRIGGERS].sort().join(',')) {
+      issue(
+        errors,
+        file,
+        `Release Candidate must trigger on exactly ${RELEASE_CANDIDATE_TRIGGERS.join(' + ')}`,
+      );
+    }
+    const push = trigger?.push;
+    const branches = push?.branches;
+    if (!Array.isArray(branches) || branches.length !== 1 || branches[0] !== 'main') {
+      issue(errors, file, 'automatic candidate trigger must be scoped to the main branch only');
+    }
+    const paths = push?.paths;
+    if (!Array.isArray(paths) || paths.length === 0) {
+      issue(errors, file, 'automatic candidate trigger must declare a version-bearing path filter');
+    } else {
+      for (const required of RELEASE_CANDIDATE_PATH_FILTER) {
+        if (!paths.includes(required))
+          issue(errors, file, `automatic candidate path filter must include ${required}`);
+      }
+      for (const declaredPath of paths) {
+        if (!RELEASE_CANDIDATE_PATH_FILTER.includes(declaredPath))
+          issue(
+            errors,
+            file,
+            `automatic candidate path filter must not widen beyond the version manifests (${declaredPath})`,
+          );
+      }
+    }
+    if (
+      !trigger?.workflow_dispatch ||
+      typeof trigger.workflow_dispatch !== 'object' ||
+      !Object.prototype.hasOwnProperty.call(trigger.workflow_dispatch, 'inputs')
+    ) {
+      issue(errors, file, 'manual dispatch with a version input must remain available');
+    }
   } else if (WORKFLOW_DISPATCH_ONLY_WORKFLOWS.includes(file)) {
     // Release workflows must never run automatically (no pull_request/push/schedule) — only a
     // human explicitly dispatching them, which is what keeps tag/release/artifact creation under
@@ -713,18 +790,128 @@ function validateSecretScan(document, errors) {
 }
 
 function validateReleaseCandidate(document, errors) {
+  const file = 'release-candidate.yml';
   const jobs = document.value?.jobs;
   const build = jobs?.build;
+  const resolve = jobs?.resolve;
   const text = JSON.stringify(build ?? '');
-  if (!build || typeof build !== 'object')
-    issue(errors, 'release-candidate.yml', 'a build job is required');
+  const resolveText = JSON.stringify(resolve ?? '');
+  const fullText = workflowStrings(document);
+  if (!build || typeof build !== 'object') issue(errors, file, 'a build job is required');
   const inputs = document.value?.on?.workflow_dispatch?.inputs;
   if (
     !inputs ||
     typeof inputs !== 'object' ||
     !Object.prototype.hasOwnProperty.call(inputs, 'version')
   )
-    issue(errors, 'release-candidate.yml', 'a required "version" input is required');
+    issue(errors, file, 'a required "version" input is required');
+
+  // ---- Task 14.2: the automatic trigger's decision stage -----------------------------------
+  //
+  // Packaging must be unreachable when no version change happened. That is enforced structurally:
+  // a separate resolve job owns the decision, and the build job runs only on its output. A single
+  // job gating twenty steps on `if:` would be one editing slip away from packaging a non-bump.
+  if (!resolve || typeof resolve !== 'object') {
+    issue(errors, file, 'a resolve job must decide whether a candidate is due');
+  } else {
+    if (!resolveText.includes('should_build'))
+      issue(errors, file, 'resolve job must publish a should_build decision output');
+    // `github.event.before` is untrusted event context: it must be validated as a full 40-character
+    // lowercase hex SHA and used only as a Git object reference.
+    if (!resolveText.includes('github.event.before'))
+      issue(
+        errors,
+        file,
+        'automatic trigger must read the previous commit from github.event.before',
+      );
+    if (!fullText.includes("'^[0-9a-f]{40}$'"))
+      issue(
+        errors,
+        file,
+        'the previous commit SHA must be validated as a full 40-character lowercase hex SHA',
+      );
+    if (!/git show "\$\{BEFORE_SHA\}:package\.json"/.test(fullText))
+      issue(
+        errors,
+        file,
+        'the previous version must be read via a validated git object reference, not reconstructed',
+      );
+    // A genuine change, not merely a touched file.
+    if (!/previous_version" = "\$new_version|version did not/.test(fullText))
+      issue(errors, file, 'resolve job must skip when the version did not actually change');
+    if (!/0{40}/.test(fullText))
+      issue(errors, file, 'resolve job must handle the zero/unavailable previous-commit SHA');
+    if (!resolveText.includes('SKIPPED') && !resolveText.includes('skip'))
+      issue(errors, file, 'a no-change push must succeed with an explicit skipped result');
+  }
+  if (build?.needs !== 'resolve')
+    issue(errors, file, 'build job must run only after the resolve decision');
+  if (!String(build?.if ?? '').includes("needs.resolve.outputs.should_build == 'true'"))
+    issue(errors, file, 'build job must be gated on the resolve decision');
+
+  // ---- Task 14.2: privacy gates ------------------------------------------------------------
+  //
+  // All three must be present, and the two pre-package gates must appear before packaging so a
+  // failure stops the job before an artifact, SBOM, attestation, or manifest exists.
+  for (const gate of [
+    'npm run audit:privacy',
+    'npm run audit:privacy -- --history',
+    'npm run audit:privacy -- --vsix',
+  ]) {
+    if (!text.includes(gate)) issue(errors, file, `build job is missing the privacy gate: ${gate}`);
+  }
+  const stepOrder = (needle) => fullText.indexOf(needle);
+  const packageStep = stepOrder('npm run package');
+  const sourceGate = stepOrder('npm run audit:privacy\n');
+  const historyGate = stepOrder('npm run audit:privacy -- --history');
+  const vsixGate = stepOrder('npm run audit:privacy -- --vsix');
+  if (packageStep > -1 && sourceGate > -1 && sourceGate > packageStep)
+    issue(errors, file, 'the source privacy gate must run before packaging');
+  if (packageStep > -1 && historyGate > -1 && historyGate > packageStep)
+    issue(errors, file, 'the history privacy gate must run before packaging');
+  for (const downstream of [
+    'actions/upload-artifact',
+    'generate-sbom.mjs',
+    'generate-release-manifest.mjs',
+    'actions/attest-build-provenance',
+  ]) {
+    const at = stepOrder(downstream);
+    if (at > -1 && vsixGate > -1 && at < vsixGate)
+      issue(errors, file, `${downstream} must not run before the packaged-VSIX privacy gate`);
+  }
+
+  // ---- Task 14.2: no chaining into the finalize stage --------------------------------------
+  //
+  // Checked against the declared trigger keys rather than the file's text: the workflow legitimately
+  // *mentions* the finalize stage (its job summary tells a human what to do next) and carries a
+  // `RELEASE_WORKFLOW_RUN_ID` env key, neither of which chains anything.
+  for (const chaining of ['workflow_run', 'repository_dispatch', 'workflow_call']) {
+    if (document.value?.on && Object.prototype.hasOwnProperty.call(document.value.on, chaining))
+      issue(errors, file, `the candidate must never be chained by a ${chaining} trigger`);
+  }
+  // Naming the finalize stage in a job summary is how the workflow tells a human what to do next,
+  // so the rule targets the mechanisms that would actually *start* another workflow, not the words.
+  if (
+    /gh\s+workflow\s+run|createWorkflowDispatch|actions\/workflows\/[^\s"']+\/dispatches/i.test(
+      fullText,
+    )
+  )
+    issue(errors, file, 'the candidate must never dispatch another workflow');
+
+  // ---- Task 14.2: safe concurrency ----------------------------------------------------------
+  const concurrency = document.value?.concurrency;
+  if (concurrency?.['cancel-in-progress'] !== false)
+    issue(
+      errors,
+      file,
+      'a running candidate build must never be cancelled in progress by a duplicate trigger',
+    );
+  if (!String(concurrency?.group ?? '').includes('github.sha'))
+    issue(
+      errors,
+      file,
+      'the concurrency group must distinguish candidates by commit as well as by ref',
+    );
   for (const command of [
     'npm ci',
     'npm run compile',
@@ -737,17 +924,12 @@ function validateReleaseCandidate(document, errors) {
     'npm test',
     'npm run package',
   ]) {
-    if (!text.includes(command))
-      issue(errors, 'release-candidate.yml', `build job is missing ${command}`);
+    if (!text.includes(command)) issue(errors, file, `build job is missing ${command}`);
   }
   if (!text.includes('actions/upload-artifact'))
-    issue(errors, 'release-candidate.yml', 'build job must upload the release candidate artifact');
+    issue(errors, file, 'build job must upload the release candidate artifact');
   if (!text.includes('retention-days'))
-    issue(
-      errors,
-      'release-candidate.yml',
-      'release candidate artifact must declare retention-days',
-    );
+    issue(errors, file, 'release candidate artifact must declare retention-days');
 }
 
 function validateFinalizeRelease(document, errors) {
@@ -851,7 +1033,7 @@ function validateFinalizeRelease(document, errors) {
 
 function validateReleaseWorkflowSecurity(file, document, errors) {
   const text = workflowStrings(document);
-  const isReleaseWorkflow = WORKFLOW_DISPATCH_ONLY_WORKFLOWS.includes(file);
+  const isReleaseWorkflow = RELEASE_WORKFLOWS.includes(file);
 
   for (const { name, pattern } of FORBIDDEN_PUBLISH_CREDENTIAL_PATTERNS) {
     if (pattern.test(text))

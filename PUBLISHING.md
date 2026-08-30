@@ -49,9 +49,13 @@ See `docs/RELEASE-PROCESS.md` for the full step-by-step procedure. In summary:
 2. Re-check Marketplace name uniqueness immediately before the first release (a point-in-time
    search during Task 13 found no existing `ai-limit-ledger` package name or "AI Limit Ledger"
    display name on the public Marketplace, but that can change).
-3. Dispatch `.github/workflows/release-candidate.yml` with the exact version to build. It packages,
-   audits, and uploads a candidate artifact (VSIX, SHA-256, SBOM, release manifest) — it never
-   publishes anything.
+3. Get a candidate. Since Task 14.2 `.github/workflows/release-candidate.yml` starts **by itself**
+   when a version bump lands on `main` (a push touching `package.json`/`package-lock.json` where the
+   version actually changed); a manifest change that does not bump the version produces a green,
+   explicitly skipped run that builds nothing. To retry after a skip, or to rebuild a candidate
+   whose seven-day artifact has expired, dispatch the workflow manually with the exact version. Both
+   paths run the same preflight and privacy gates, produce the same artifact (VSIX, SHA-256, SBOM,
+   release manifest, release notes), and are equally promotable — and neither publishes anything.
 4. Verify the candidate's SHA-256, then upload the VSIX to the Marketplace **manually** through the
    publisher portal at
    `https://marketplace.visualstudio.com/manage/publishers/fatihdumlupinar-dev`. This project
@@ -67,6 +71,11 @@ See `docs/RELEASE-PROCESS.md` for the full step-by-step procedure. In summary:
    separate, dependency-free, fully offline local/VSIX content check) against the freshly packaged
    VSIX and confirm the latter reports zero `fail` findings. These two commands check different
    things and neither substitutes for the other. `release-candidate.yml` runs both automatically.
+   It also runs `npm run audit:privacy` over the source tree and over git history before packaging,
+   and `npm run audit:privacy -- --vsix <file>.vsix` over the built package before any artifact,
+   SBOM, manifest, or attestation is produced — a third, distinct check that looks for personal and
+   machine-identifying data rather than for advisories or packaging mistakes. Run the same three
+   locally before an upload. See `docs/PRIVACY-AUDIT.md`.
 7. Build and test on a supported Node LTS (Node 24 preferred, Node 22 minimum — see
    `.nvmrc`/`package.json` `engines.node`); Node 20 is end-of-life and unsupported for development.
 8. Complete every item in `docs/MARKETPLACE-PREFLIGHT.md`. Screenshots are optional (see below) and
