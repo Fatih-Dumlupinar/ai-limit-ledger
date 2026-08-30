@@ -54,7 +54,7 @@ export function providerSegmentText(
     normalizeProviderId(provider.providerId) === 'copilot' &&
     typeof provider.credits?.used === 'number'
   ) {
-    return `${name} ${catalog.aiCredits} ${catalog.used.toLowerCase()}: ${provider.credits.used}`;
+    return `${name} ${provider.credits.used} ${catalog.credits.toLowerCase()}`;
   }
   switch (presentation.normalizedState) {
     case 'authentication-required':

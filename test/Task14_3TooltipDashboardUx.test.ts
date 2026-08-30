@@ -207,7 +207,7 @@ describe('Task 14.3 shared provider presentation', () => {
 
   it('localizes the reset relative text in Turkish', () => {
     const result = buildProviderPresentationSummary(snapshot(), { now: NOW, language: 'tr' });
-    expect(result.quotaWindows[0]?.reset?.relativeText).toContain('içinde');
+    expect(result.quotaWindows[0]?.reset?.relativeText).toContain('sonra');
   });
 
   it('marks a healthy snapshot as fresh', () => {
@@ -307,7 +307,7 @@ describe('Task 14.3 shared provider presentation', () => {
       }),
       { now: NOW },
     );
-    expect(presentedPercentageText(result.quotaWindows[0]!, 'remaining')).toBe('13% used');
+    expect(presentedPercentageText(result.quotaWindows[0]!, 'remaining')).toBe('87% left');
   });
 
   it('falls back to remaining when only remaining is provided', () => {
@@ -347,7 +347,7 @@ describe('Task 14.3 tooltip hierarchy', () => {
   it('shows a vertical detailed quota block instead of a table', () => {
     const tooltip = formatProviderTooltip(snapshot(), NOW, { density: 'detailed', language: 'en' });
     expect(tooltip).not.toContain('|---');
-    expect(tooltip).toContain('**Five-hour window**');
+    expect(tooltip).toContain('**5-hour window**');
   });
 
   it('renders a detailed bar without repeating its percentage on the same line', () => {
