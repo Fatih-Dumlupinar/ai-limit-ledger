@@ -1,6 +1,25 @@
 name: Release Candidate
 
+# Two ways in, one behaviour.
+#
+# 1. Automatically, when a version bump lands on main. A push that touches package.json or
+#    package-lock.json is the only thing that can start this; the resolve job then proves the
+#    version actually *changed* before anything is built, so an unrelated manifest edit (a new
+#    script, a dependency bump) resolves to "skipped" and produces no package.
+# 2. Manually, by dispatching with an explicit version — the retry path when an automatic run was
+#    skipped, or when a candidate needs rebuilding.
+#
+# Neither path can publish. This workflow builds, verifies, and attests a candidate and stops
+# there: it holds contents: read, never touches the releases API, never creates or moves a ref, and
+# has no Marketplace credential of any kind. Turning a candidate into a release is
+# finalize-release.yml's job, behind a protected environment and a human-typed confirmation.
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
   workflow_dispatch:
     inputs:
       version:
@@ -11,8 +30,12 @@ on:
 permissions:
   contents: read
 
+# Scoped to the ref plus the specific target (dispatch version, or the pushed commit), so two
+# different versions never contend, and never cancelling: a candidate build that is already running
+# is a trusted, half-finished, attested artifact — a duplicate trigger queues behind it rather than
+# killing it.
 concurrency:
-  group: release-candidate-${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  group: release-candidate-${{ github.workflow }}-${{ github.ref }}-${{ inputs.version || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -20,59 +43,210 @@ env:
   EXPECTED_NAME: ai-limit-ledger
 
 jobs:
+  # -------------------------------------------------------------------------------------------
+  # Stage 1 — decide whether there is anything to build.
+  #
+  # Separated into its own job precisely so that "no version change" can be a *successful* run that
+  # builds nothing. Gating twenty steps on an `if:` inside one job would leave a packaging step one
+  # editing mistake away from running on a non-bump push.
+  # -------------------------------------------------------------------------------------------
+  resolve:
+    name: Resolve Release Candidate Target
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      should_build: ${{ steps.decide.outputs.should_build }}
+      version: ${{ steps.decide.outputs.version }}
+      previous_version: ${{ steps.decide.outputs.previous_version }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - name: Verify trigger ref and event
+        env:
+          TRIGGER_REF: ${{ github.ref }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+            echo "release-candidate only runs on main, got $TRIGGER_REF" >&2
+            exit 1
+          fi
+          case "$TRIGGER_EVENT" in
+            push|workflow_dispatch) ;;
+            *) echo "unsupported trigger event: $TRIGGER_EVENT" >&2; exit 1 ;;
+          esac
+
+      # Full history is structurally required here for the same reason secret-scan.yml needs it:
+      # the privacy audit's --history mode must be able to walk every reachable commit, and the
+      # automatic trigger must read package.json as it stood at the previous main tip.
+      - name: Checkout repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every attacker-influenceable value — the dispatch input and github.event.before — reaches
+      # the shell only through env:, is matched against an anchored allowlist before it is used,
+      # and is re-exported only after it passes. github.event.before in particular is used solely
+      # as a validated Git object reference, never as free shell text.
+      - name: Decide whether a candidate is due
+        id: decide
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          skip() {
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "previous_version=" >> "$GITHUB_OUTPUT"
+            echo "reason=$1" >> "$GITHUB_OUTPUT"
+            echo "SKIPPED: $1"
+            exit 0
+          }
+
+          read_manifest_version() { node --print "require('./package.json').version"; }
+          read_lock_version() { node --print "require('./package-lock.json').version"; }
+
+          new_version="$(read_manifest_version)"
+          lock_version="$(read_lock_version)"
+
+          if ! printf '%s' "$new_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "package.json version is not strict major.minor.patch: $new_version" >&2
+            exit 1
+          fi
+          if [ "$new_version" != "$lock_version" ]; then
+            echo "package.json ($new_version) and package-lock.json ($lock_version) versions disagree" >&2
+            exit 1
+          fi
+
+          if [ "$TRIGGER_EVENT" = "workflow_dispatch" ]; then
+            if ! printf '%s' "$INPUT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "version input must be strict major.minor.patch (e.g. 0.7.1); got: $INPUT_VERSION" >&2
+              exit 1
+            fi
+            if [ "$INPUT_VERSION" != "$new_version" ]; then
+              echo "version input ($INPUT_VERSION) does not match package.json ($new_version)" >&2
+              exit 1
+            fi
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "version=$new_version" >> "$GITHUB_OUTPUT"
+            echo "previous_version=(manual dispatch)" >> "$GITHUB_OUTPUT"
+            echo "reason=manual dispatch for $new_version" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # --- automatic push path -----------------------------------------------------------
+          # A missing, zero, or malformed "before" SHA means there is no previous state to compare
+          # against (a brand-new branch, a force-updated ref, an unavailable event payload). That is
+          # a skip, never a build: without a previous version this job cannot prove a bump happened.
+          if ! printf '%s' "$BEFORE_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            skip "push event carried no usable previous commit SHA"
+          fi
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            skip "first push to the branch — no previous version to compare"
+          fi
+          if ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            skip "previous commit is not present in this checkout"
+          fi
+
+          previous_version="$(git show "${BEFORE_SHA}:package.json" 2>/dev/null | node --print "JSON.parse(require('node:fs').readFileSync(0,'utf8')).version" || echo '')"
+          previous_lock_version="$(git show "${BEFORE_SHA}:package-lock.json" 2>/dev/null | node --print "JSON.parse(require('node:fs').readFileSync(0,'utf8')).version" || echo '')"
+
+          if [ -z "$previous_version" ]; then
+            skip "previous package.json could not be read"
+          fi
+          if [ "$previous_version" = "$new_version" ]; then
+            skip "package.json changed but the version did not ($new_version)"
+          fi
+          if ! printf '%s' "$previous_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            skip "previous version was not strict major.minor.patch"
+          fi
+          # Both files must carry the same change, or the bump is half-applied and the lockfile
+          # would ship disagreeing with the manifest.
+          if [ "$previous_lock_version" != "$previous_version" ]; then
+            echo "previous package-lock.json ($previous_lock_version) disagreed with package.json ($previous_version)" >&2
+            exit 1
+          fi
+
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+          echo "reason=version bumped from $previous_version to $new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize a skipped run
+        if: steps.decide.outputs.should_build != 'true'
+        env:
+          SKIP_REASON: ${{ steps.decide.outputs.reason }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Release Candidate — skipped"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Trigger | \`$TRIGGER_EVENT\` |"
+            echo "| Result | no candidate built |"
+            echo "| Reason | $SKIP_REASON |"
+            echo ""
+            echo "No package, checksum, SBOM, manifest, or attestation was produced."
+            echo "No ref and no GitHub Release were created. Nothing was uploaded to the Marketplace."
+            echo ""
+            echo "To build a candidate for the current version anyway, dispatch this workflow manually"
+            echo "from main with the exact version as input."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------------------------
+  # Stage 2 — build, verify, and attest the candidate.
+  # -------------------------------------------------------------------------------------------
   build:
     name: Build Release Candidate
+    needs: resolve
+    if: needs.resolve.outputs.should_build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
       attestations: write
+    env:
+      RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+      RELEASE_TAG: v${{ needs.resolve.outputs.version }}
     steps:
-      - name: Verify trigger ref is main
-        env:
-          TRIGGER_REF: ${{ github.ref }}
+      # The version arrives from the resolve job, which has already matched it against the anchored
+      # strict-SemVer grammar and against package.json. It is re-checked here so this job is safe on
+      # its own terms rather than trusting an upstream output.
+      - name: Re-validate the resolved version
         run: |
           set -euo pipefail
-          if [ "$TRIGGER_REF" != "refs/heads/main" ]; then
-            echo "release-candidate must be dispatched from the main branch, got $TRIGGER_REF" >&2
+          if ! printf '%s' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "resolved version is not strict major.minor.patch: $RELEASE_VERSION" >&2
             exit 1
           fi
 
-      # The dispatch input is the only attacker-influenceable value in this workflow, so it is
-      # validated against an anchored strict-SemVer allowlist here, in the very first step that
-      # touches it, and never interpolated into a shell body via ${{ }} — it arrives through env:
-      # and is re-exported (as RELEASE_VERSION/RELEASE_TAG) only after it has passed. Anything
-      # that is not exactly major.minor.patch — a "v" prefix, a two-part "0.7", a prerelease or
-      # build-metadata suffix, "latest"/"main", an empty value, or anything carrying a shell
-      # metacharacter — fails the job here, before the value can reach a path, a filter, or a
-      # command line.
-      - name: Validate requested version input
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if ! printf '%s' "$INPUT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "version input must be strict major.minor.patch (e.g. 0.7.1); got: $INPUT_VERSION" >&2
-            exit 1
-          fi
-          echo "RELEASE_VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=v$INPUT_VERSION" >> "$GITHUB_ENV"
-
-      - name: Checkout main
+      - name: Checkout repository with full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify checked-out commit matches origin/main
+      - name: Verify the checked-out commit is the one that triggered this run
+        env:
+          TRIGGER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          git fetch --quiet origin main
           local_sha="$(git rev-parse HEAD)"
-          remote_sha="$(git rev-parse origin/main)"
-          if [ "$local_sha" != "$remote_sha" ]; then
-            echo "checked-out commit ($local_sha) does not match origin/main ($remote_sha)" >&2
+          if [ "$local_sha" != "$TRIGGER_SHA" ]; then
+            echo "checked-out commit ($local_sha) does not match the triggering commit" >&2
+            exit 1
+          fi
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$local_sha" origin/main; then
+            echo "candidate commit is not part of main's history — refusing to build" >&2
             exit 1
           fi
           echo "GIT_COMMIT_SHA=$local_sha" >> "$GITHUB_ENV"
@@ -175,6 +349,18 @@ jobs:
       - name: Audit source-tree release readiness
         run: npm run audit:release
 
+      # ---- Privacy gates -------------------------------------------------------------------
+      # These three run *before* anything is uploaded, signed, or described in a manifest. A
+      # failure here stops the job outright, so a package carrying personal data can never reach an
+      # artifact, an SBOM, an attestation, or a release manifest. The tool prints only pattern ids,
+      # locations, structural masks, and fingerprints — a matched value is discarded before it can
+      # be rendered, so these logs are safe to read and safe to share.
+      - name: Privacy audit — source tree
+        run: npm run audit:privacy
+
+      - name: Privacy audit — git history
+        run: npm run audit:privacy -- --history
+
       - name: Run full test suite
         run: npm test
 
@@ -197,6 +383,9 @@ jobs:
           test -f "$expected"
           echo "VSIX_PATH=$expected" >> "$GITHUB_ENV"
 
+      - name: Privacy audit — packaged VSIX
+        run: npm run audit:privacy -- --vsix "$VSIX_PATH"
+
       - name: Audit packaged VSIX
         run: npm run audit:release -- "$VSIX_PATH"
 
@@ -205,6 +394,7 @@ jobs:
           set -euo pipefail
           sha256sum "$VSIX_PATH" > SHA256SUMS.txt
           cat SHA256SUMS.txt
+          echo "VSIX_SHA256=$(awk '{print $1}' SHA256SUMS.txt)" >> "$GITHUB_ENV"
 
       - name: Generate SBOM
         run: node scripts/generate-sbom.mjs sbom.cdx.json
@@ -235,6 +425,10 @@ jobs:
       - name: Compute short commit SHA for artifact naming
         run: echo "SHORT_SHA=${GIT_COMMIT_SHA:0:12}" >> "$GITHUB_ENV"
 
+      # Seven days: long enough for the owner to download the candidate, complete the manual
+      # Marketplace upload, and dispatch Finalize Release, and short enough that an unpromoted
+      # candidate does not linger as a downloadable build artifact. A candidate that expires is not
+      # lost — it is rebuilt deterministically from the same commit by dispatching this workflow.
       - name: Upload release candidate artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -246,4 +440,45 @@ jobs:
             sbom.cdx.json
             RELEASE_NOTES.md
           if-no-files-found: error
-          retention-days: 21
+          retention-days: 7
+
+      - name: Summarize the candidate
+        if: always()
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+          RESOLVE_REASON: ${{ needs.resolve.outputs.reason }}
+          PREVIOUS_VERSION: ${{ needs.resolve.outputs.previous_version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Release Candidate — $RELEASE_VERSION"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Trigger | \`$TRIGGER_EVENT\` |"
+            echo "| Reason | $RESOLVE_REASON |"
+            echo "| Previous version | $PREVIOUS_VERSION |"
+            echo "| Version | $RELEASE_VERSION |"
+            echo "| Commit | \`${GIT_COMMIT_SHA:-unknown}\` |"
+            echo "| Publisher | $EXPECTED_PUBLISHER |"
+            echo "| Extension ID | $EXPECTED_PUBLISHER.$EXPECTED_NAME |"
+            echo "| Tests | full suite run before packaging |"
+            echo "| Privacy audit | source, history, and packaged VSIX all passed |"
+            echo "| VSIX SHA-256 | \`${VSIX_SHA256:-not produced}\` |"
+            echo "| Artifact retention | 7 days |"
+            echo ""
+            echo "### What this run did NOT do"
+            echo ""
+            echo "- It did **not** upload anything to the Visual Studio Marketplace."
+            echo "- It did **not** create, move, or delete a tag, and did **not** create a GitHub Release."
+            echo "- It held \`contents: read\` throughout and used no publishing credential."
+            echo ""
+            echo "### Next step (manual)"
+            echo ""
+            echo "1. Download this run's artifact and verify the SHA-256 above."
+            echo "2. Upload the VSIX to the Marketplace by hand and confirm the listing renders."
+            echo "3. Dispatch **Finalize Release** with this version, this run's ID, and this commit SHA."
+            echo ""
+            echo "_Privacy audit findings are reported as pattern id, location, mask, and fingerprint only;"
+            echo "no matched value appears in this summary or in the job log._"
+          } >> "$GITHUB_STEP_SUMMARY"

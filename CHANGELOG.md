@@ -2,6 +2,85 @@
 
 ## [Unreleased]
 
+- **Task 14.2 — Automatic release candidates and a permanent privacy audit.** No provider, runtime,
+  status bar, or dashboard behavior change, and no version bump: this task changes the release
+  machinery and adds a repository audit tool. The Marketplace upload and the GitHub Release both
+  stay manual and owner-approved.
+  - `.github/workflows/release-candidate.yml` now also runs automatically on a push to `main` that
+    touches `package.json` or `package-lock.json`, alongside the existing manual dispatch. Its
+    trigger set is exactly those two events, asserted as a closed list — no `pull_request`, no
+    `schedule`, and no `workflow_run`/`repository_dispatch`/`workflow_call` chaining. A candidate
+    build holds `contents: read`, creates no ref and no release, and publishes nothing, so
+    automating it costs no privilege.
+  - A separate `resolve` job decides whether a candidate is due and the `build` job runs only when
+    it says so, which makes packaging structurally unreachable on a non-bump push. The previous
+    version is read with `git show ${BEFORE_SHA}:package.json`, where `BEFORE_SHA` arrives from
+    `github.event.before` through `env:` and must match `^[0-9a-f]{40}$` before it is used as a Git
+    object reference. A manifest change that does not change the version, a zero or unavailable
+    previous commit, or an unreadable previous `package.json` produces a **successful, explicitly
+    skipped run that builds nothing**; disagreeing manifests, a missing changelog section or
+    release-notes file, or an existing `v<version>` ref fail the run instead.
+  - Added `scripts/privacy-audit.mjs` and `npm run audit:privacy` — a permanent, dependency-free,
+    offline, read-only audit for personal and machine-identifying data across the tracked source
+    tree, all reachable git history (`--history`), and a packaged VSIX (`--vsix`), with an optional
+    redacted JSON report (`--json`). It complements rather than replaces GitHub secret scanning and
+    the Gitleaks job, which answer the narrower question of whether a revocable credential exists.
+  - The audit runs as a fail-closed gate in the candidate workflow at three points: source tree and
+    history before packaging, and the built VSIX before the artifact upload, SBOM, release manifest,
+    and provenance attestation — so a package carrying personal data can never become a signed,
+    attested, downloadable artifact.
+  - The audit never prints a matched value anywhere. A match is fingerprinted, masked to its
+    structural shape, and classified, and the raw value is discarded; findings carry no field that
+    could hold it. It refuses credential stores, `.env` contents, and raw provider payloads, refuses
+    to scan outside the repository or follow a symlink escaping its root, rejects a VSIX entry name
+    that would escape the extraction root, handles binary/invalid-UTF-8/oversized input as
+    documented and reported skips, reads PNG metadata chunks structurally instead of scanning pixel
+    data as text, and exits non-zero on its own failure rather than passing silently.
+  - Findings are separated into intentional public identity (the owner handle, the Marketplace
+    publisher id, the GitHub-issued noreply commit address, the canonical project URLs), safe
+    fixtures, and things a human must review — so a clean report distinguishes a genuinely examined
+    repository from an unexamined one. Suppressions live in `scripts/privacy-allowlist.json` and
+    must name one known pattern id, one exact non-wildcard path, and a written reason; an entry can
+    never contain the value it excuses.
+  - Extracted the dependency-free ZIP reader into `scripts/lib/zip-reader.mjs` and the pattern,
+    masking, fingerprint, and classification primitives into `scripts/lib/privacy-patterns.mjs`, so
+    the release audit and the privacy audit share one implementation instead of two that drift.
+    `scripts/release-audit.mjs` re-exports the reader unchanged for existing importers.
+  - `scripts/release-audit.mjs` now also rejects, in a packaged VSIX: an entry name that would
+    escape the extraction root, and personal/machine data in entry names or text content
+    (user-profile paths, UNC shares, MAC addresses, source maps carrying absolute build paths, VS
+    Code profile paths). Its denylist additionally covers privacy-audit reports, log files, local
+    VS Code profile state, `.env`/`.npmrc`/`.netrc`, and private key material.
+  - `.github/workflows/finalize-release.yml` accepts a candidate built by either `push` or
+    `workflow_dispatch` — an explicit two-value allowlist, every other event still refused — and now
+    additionally requires the candidate run's head branch to be `main`, a check that did not exist
+    before. It remains `workflow_dispatch`-only, `production-release`-gated, with the exact
+    Marketplace URL, the version-scoped confirmation phrase, run-id/commit-SHA verification,
+    artifact and checksum re-verification, and idempotent tag/release creation that never
+    force-moves a tag or overwrites an asset.
+  - Artifact retention is now a flat seven days for every workflow, replacing the 14-30 day band
+    Task 14 reserved for the release candidate. Candidates are now produced automatically, the
+    manual upload plus finalize is a same-week activity, and an expired candidate is rebuilt
+    deterministically from the same commit — so a month-long downloadable build artifact was
+    retained risk with no matching benefit.
+  - `fetch-depth: 0` is now permitted in `release-candidate.yml`, joining `secret-scan.yml` and
+    `finalize-release.yml`. Both of its uses structurally require full history: the `--history`
+    privacy gate walks every reachable commit, and the version comparison reads `package.json` at
+    the previous `main` tip. A shallow clone would make both silently vacuous.
+  - Extended `scripts/verify-workflows.mjs` to enforce all of the above structurally: the exact
+    trigger set, `main`-only branch scope, a path filter that may not widen beyond the two version
+    manifests, the resolve/build separation and its gate, validated `github.event.before` handling,
+    the genuine version-change check, the three privacy gates and their ordering relative to
+    packaging and to the artifact/SBOM/manifest/attestation steps, the seven-day retention band, a
+    concurrency group that is commit-scoped and never cancels in progress, and the absence of any
+    chaining trigger or workflow-dispatch call.
+  - Added `docs/PRIVACY-AUDIT.md` and extended `docs/RELEASE-PROCESS.md`, `docs/DEVELOPMENT.md`,
+    `PUBLISHING.md`, `SECURITY.md`, and `PRIVACY.md` to cover when a candidate starts, when it
+    skips, how to retry manually, why the Marketplace upload and Finalize Release stay manual, what
+    the privacy audit scans and deliberately does not, how reports are redacted, how it differs from
+    secret scanning, the difference between public identity and leaked personal data, and why a
+    history finding does not trigger an automatic rewrite.
+
 ## 0.7.1
 
 - **Task 14.1 — Reusable release process and complete development environment.** No provider,

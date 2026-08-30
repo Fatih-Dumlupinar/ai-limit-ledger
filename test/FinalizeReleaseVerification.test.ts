@@ -39,8 +39,18 @@ describe('Task 14.1: finalize-release candidate-run verification', () => {
     expect(source).toContain('[ "$workflow_name" = "Release Candidate" ]');
   });
 
-  it('requires the candidate run to have been dispatched, not triggered automatically', () => {
-    expect(source).toContain('[ "$event_name" = "workflow_dispatch" ]');
+  // Task 14.2 made candidates buildable automatically on a version bump, so the promotable set is
+  // an explicit two-value allowlist rather than a single equality. It is not open-ended: any other
+  // event is refused, and the run must additionally have been built from main — a check that did
+  // not exist before, and which closes a gap the single-event comparison never covered.
+  it('accepts a candidate from a push or a dispatch, and from no other event', () => {
+    expect(source).toContain('push|workflow_dispatch)');
+    expect(source).toContain('cannot produce a promotable candidate');
+  });
+
+  it('requires the candidate run to have been built from main', () => {
+    expect(source).toContain('[ "$head_branch" = "main" ]');
+    expect(source).toContain('--json headBranch');
   });
 
   it('requires the candidate run to have concluded successfully', () => {

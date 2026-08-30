@@ -1,6 +1,78 @@
 # AI Limit Ledger Security
 
+## Automatic release candidates and the privacy audit (Task 14.2)
+
+**Automatic candidates.** `.github/workflows/release-candidate.yml` now also runs on a push to
+`main` that touches `package.json` or `package-lock.json`, alongside the existing manual dispatch.
+Its trigger set is exactly those two events and is asserted as a closed list by
+`scripts/verify-workflows.mjs` — no `pull_request`, no `schedule`, and no `workflow_run` /
+`repository_dispatch` / `workflow_call` chaining. Automating this stage costs no privilege: a
+candidate build holds `contents: read`, creates no ref and no release, and performs no Marketplace
+upload. The stage that _can_ publish, `finalize-release.yml`, remains manual and environment-gated
+and was not automated.
+
+A separate `resolve` job owns the decision, and the `build` job runs only when it reports
+`should_build == 'true'`. That separation is structural on purpose: gating twenty steps on an `if:`
+inside a single job would leave packaging one editing slip away from running on a non-bump push. The
+resolve job reads the previous version from `git show ${BEFORE_SHA}:package.json`, where
+`BEFORE_SHA` arrives from `github.event.before` through an `env:` mapping and must match
+`^[0-9a-f]{40}$` before it is used — it is only ever a validated Git object reference, never free
+shell text. A push that changes a manifest without changing the version, or whose previous commit is
+the zero SHA or otherwise unavailable, produces a **successful, explicitly skipped run that builds
+nothing**; a repository in a state a human must fix (manifests disagreeing, a missing changelog
+section or release-notes file, an existing `v<version>` ref) fails instead.
+
+`finalize-release.yml` now accepts a candidate built by either `push` or `workflow_dispatch` — an
+explicit two-value allowlist, with every other event still refused — and additionally requires the
+candidate run's head branch to be `main`, a check that did not exist before. All of its other
+security properties are unchanged: `workflow_dispatch`-only trigger, `production-release`
+environment with a required reviewer, exact Marketplace URL, version-scoped confirmation phrase, run
+id and commit SHA verification, artifact and checksum re-verification, and idempotent tag/release
+creation that never force-moves a tag or overwrites an asset.
+
+**Artifact retention is now a flat seven days for every workflow.** Task 14 gave the release
+candidate a 14-30 day band on the assumption that a candidate might sit unpromoted for weeks. Now
+that a bump on `main` produces one automatically, that reason is gone: the manual Marketplace upload
+plus Finalize Release is a same-week activity, and an expired candidate is not lost — dispatching
+the workflow rebuilds it deterministically from the same commit. Holding an unpromoted, downloadable
+build artifact for a month is retained risk with no matching benefit.
+
+**`fetch-depth: 0` is now allowed in `release-candidate.yml`,** joining `secret-scan.yml` and
+`finalize-release.yml`. Both of its uses structurally require full history: the privacy audit's
+`--history` gate walks every reachable commit exactly as the secret scanner does, and the version
+comparison must read `package.json` as it stood at the previous `main` tip. A shallow clone would
+make both silently vacuous, which is worse than not running them.
+
+**The privacy audit** (`scripts/privacy-audit.mjs`, `npm run audit:privacy`) is a permanent,
+dependency-free, offline, read-only tool that scans the tracked source tree, all reachable git
+history, and a packaged VSIX for personal and machine-identifying data — user-profile paths,
+hostnames, UNC shares, private IP and MAC addresses, source maps carrying absolute build paths, VS
+Code profile paths, PNG metadata — as well as a backstop set of credential shapes. It complements
+rather than replaces GitHub secret scanning and the Gitleaks job, which answer the narrower question
+of whether a _revocable credential_ is present.
+
+It runs as a fail-closed gate in the candidate workflow at three points: over the source tree and
+over history before packaging, and over the built VSIX before the artifact upload, SBOM, release
+manifest, and provenance attestation. A failure stops the job there, so a package carrying personal
+data can never become a signed, attested, downloadable artifact.
+
+The tool never prints a matched value — not to stdout, stderr, a JSON report, or a job summary. A
+match is fingerprinted (first 12 hex characters of its SHA-256), masked to its structural shape, and
+classified, and the raw value is then discarded; a finding object has no field that could carry it.
+It refuses to read credential stores, `.env` contents, or raw provider payloads, refuses to scan
+outside the repository, refuses to follow a symlink escaping the repository root, rejects a VSIX
+entry name that would escape the extraction root, handles binary/invalid-UTF-8/oversized input as
+documented and _reported_ skips, and treats a crash, timeout, or subprocess error as a non-zero exit
+rather than a silent pass. Suppressions live in `scripts/privacy-allowlist.json` and must name one
+known pattern id, one exact non-wildcard path, and a written reason — an allowlist entry can never
+contain the value it excuses. See `docs/PRIVACY-AUDIT.md`.
+
 ## Secure release system and first Marketplace release (Task 14)
+
+> Superseded in part by Task 14.2 above: `release-candidate.yml` is no longer `workflow_dispatch`-only
+> (it also runs automatically on a version bump merged to `main`), the version is no longer fixed to
+> the release this workflow was written for, and the candidate artifact's retention band is now a
+> flat seven days rather than 14-30. Everything else described below still holds.
 
 Two new `workflow_dispatch`-only GitHub Actions workflows implement a manual-approval release
 process for the 0.7.0 first Marketplace release; see `docs/RELEASE-PROCESS.md` for the full

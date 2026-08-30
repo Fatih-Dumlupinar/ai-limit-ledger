@@ -18,8 +18,15 @@ describe('Task 14: release-candidate.yml workflow policy', () => {
     expect(errors as string[]).toEqual([]);
   });
 
-  it('triggers only on workflow_dispatch, never automatically', () => {
-    expect(Object.keys(workflow.on as YamlMap)).toEqual(['workflow_dispatch']);
+  // Task 14.2 added the automatic trigger. The property that matters is unchanged and is asserted
+  // more tightly than before: the trigger set is an exact, closed list — a push to main touching a
+  // version manifest, plus the manual dispatch — so no third way to start a candidate can appear.
+  // The push path's branch scope, path filter, and skip-without-building behaviour are covered in
+  // test/ReleaseCandidateAutomation.test.ts.
+  it('triggers on exactly a scoped push and a manual dispatch, and nothing else', () => {
+    const on = workflow.on as YamlMap;
+    expect(Object.keys(on).sort()).toEqual(['push', 'workflow_dispatch']);
+    expect((on.push as YamlMap).branches).toEqual(['main']);
   });
 
   it('requires an exact "version" input', () => {
@@ -40,10 +47,13 @@ describe('Task 14: release-candidate.yml workflow policy', () => {
     });
   });
 
-  it('uses a version-scoped, ref-scoped, non-cancelling concurrency group', () => {
+  it('uses a target-scoped, ref-scoped, non-cancelling concurrency group', () => {
     const concurrency = workflow.concurrency as YamlMap;
     expect(String(concurrency.group)).toContain('github.ref');
+    // The group keys on the dispatch version when there is one and on the commit otherwise, so an
+    // automatic and a manual candidate for different targets never contend.
     expect(String(concurrency.group)).toContain('inputs.version');
+    expect(String(concurrency.group)).toContain('github.sha');
     expect(concurrency['cancel-in-progress']).toBe(false);
   });
 
@@ -87,8 +97,11 @@ describe('Task 14: release-candidate.yml workflow policy', () => {
     const retentionMatch = source.match(/retention-days:\s*(\d+)/);
     expect(retentionMatch).not.toBeNull();
     const retentionDays = Number(retentionMatch?.[1]);
-    expect(retentionDays).toBeGreaterThanOrEqual(14);
-    expect(retentionDays).toBeLessThanOrEqual(30);
+    // Task 14.2 narrowed this from the old 14-30 day band to a flat seven days: candidates are now
+    // produced automatically on every version bump, so an unpromoted one should not linger as a
+    // downloadable build artifact — and an expired candidate is rebuilt deterministically from the
+    // same commit by dispatching the workflow.
+    expect(retentionDays).toBe(7);
   });
 
   it('never interpolates untrusted event/input context directly into a shell command', () => {

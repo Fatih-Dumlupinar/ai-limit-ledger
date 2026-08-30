@@ -119,20 +119,40 @@ describe('Task 14.1: workflow regression invariants', () => {
     }
   });
 
-  it('keeps both release workflows dispatch-only', () => {
-    for (const file of ['release-candidate.yml', 'finalize-release.yml']) {
+  // Task 14.2 automated the *candidate* stage — a read-only, non-publishing build — while leaving
+  // the *finalize* stage, the one that creates a ref and a public release, manual. So the invariant
+  // is no longer "both release workflows are dispatch-only"; it is that each release workflow's
+  // trigger set is an exact closed list, and that the one which can publish stays manual.
+  it('keeps each release workflow triggered by an exact, closed set of events', () => {
+    const triggersOf = (file: string) => {
       const { document } = inspectWorkflow(file, sources.get(file) as string);
       const on = (document.value as Record<string, unknown>).on as Record<string, unknown>;
-      expect(Object.keys(on), file).toEqual(['workflow_dispatch']);
-    }
+      return Object.keys(on).sort();
+    };
+    expect(triggersOf('release-candidate.yml')).toEqual(['push', 'workflow_dispatch']);
+    expect(triggersOf('finalize-release.yml')).toEqual(['workflow_dispatch']);
   });
 
-  it('keeps the release-candidate artifact retention inside the 14-30 day band', () => {
-    const retention = Number(
-      (sources.get('release-candidate.yml') as string).match(/retention-days:\s*(\d+)/)?.[1],
+  it('keeps the finalize stage — the only one that can publish — behind a manual approval', () => {
+    const { document } = inspectWorkflow(
+      'finalize-release.yml',
+      sources.get('finalize-release.yml') as string,
     );
-    expect(retention).toBeGreaterThanOrEqual(14);
-    expect(retention).toBeLessThanOrEqual(30);
+    const jobs = (document.value as Record<string, unknown>).jobs as Record<
+      string,
+      { environment?: string }
+    >;
+    expect(jobs.finalize.environment).toBe('production-release');
+  });
+
+  it('caps every artifact in every workflow at seven days of retention', () => {
+    for (const [file, source] of sources) {
+      for (const match of source.matchAll(/retention-days:\s*(\d+)/g)) {
+        const retention = Number(match[1]);
+        expect(retention, file).toBeGreaterThanOrEqual(1);
+        expect(retention, file).toBeLessThanOrEqual(7);
+      }
+    }
   });
 
   it('reports zero failing checks from the source-tree release audit', () => {

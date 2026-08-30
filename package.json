@@ -731,8 +731,9 @@
     "package": "npm run compile && vsce package --no-dependencies",
     "audit:release": "node scripts/release-audit.mjs",
     "audit:release:packaged": "node scripts/release-audit.mjs --packaged",
+    "audit:privacy": "node scripts/privacy-audit.mjs",
     "verify:workflows": "node scripts/verify-workflows.mjs",
-    "check:local": "npm run compile && npm run lint && npm run format:check && npm run verify:workflows && npm audit --audit-level=moderate && npm audit --omit=dev --audit-level=moderate && npm run audit:release && npm test && npm run package && npm run audit:release:packaged"
+    "check:local": "npm run compile && npm run lint && npm run format:check && npm run verify:workflows && npm audit --audit-level=moderate && npm audit --omit=dev --audit-level=moderate && npm run audit:release && npm run audit:privacy && npm run audit:privacy -- --history && npm test && npm run package && npm run audit:release:packaged"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
