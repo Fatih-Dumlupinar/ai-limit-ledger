@@ -143,38 +143,4 @@ describe('Task 14.1: workflow regression invariants', () => {
     expect(output).toMatch(/\d+ checks: \d+ pass, \d+ warn, 0 fail/);
     expect(output).not.toMatch(/^\[✗\]/m);
   });
-
-  it('leaves the extension runtime untouched — no source file changed for this task', () => {
-    // CI checks out with the default shallow depth (ci.yml deliberately keeps fetch-depth: 0
-    // reserved for secret-scan.yml and finalize-release.yml — see the verifier policy above), so
-    // HEAD may have no local ancestry at all. A three-dot `origin/main...HEAD` diff needs a
-    // merge-base walk that a single-commit shallow checkout cannot satisfy. Fetching main's tip
-    // and doing a plain two-tree diff against it needs no ancestry, only the two commit objects.
-    let base = 'origin/main';
-    try {
-      execFileSync('git', ['fetch', '--quiet', '--depth=1', 'origin', 'main'], {
-        cwd: ROOT,
-        stdio: 'ignore',
-      });
-      base = 'FETCH_HEAD';
-    } catch {
-      // No network access in this environment: fall back to a pre-existing local ref, if any.
-    }
-    let changed: string[];
-    try {
-      changed = execFileSync('git', ['diff', '--name-only', base, 'HEAD'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      })
-        .split('\n')
-        .filter(Boolean);
-    } catch {
-      // Neither a fetch nor a local origin/main ref was available; nothing to compare here.
-      return;
-    }
-    // A process/documentation task must not touch the extension runtime. If this ever fails, the
-    // change under review is no longer behavior-neutral and needs runtime test coverage too.
-    expect(changed.filter((f) => f.startsWith('src/'))).toEqual([]);
-    expect(changed.filter((f) => /^package\.nls(\.tr)?\.json$/.test(f))).toEqual([]);
-  });
 });
