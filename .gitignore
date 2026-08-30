@@ -46,11 +46,19 @@ Thumbs.db
 *.swp
 *~
 
-# Editor-local settings (project-shared .vscode/launch.json stays tracked)
+# Editor-local settings (the project-shared .vscode/* development configuration stays tracked;
+# anything else a contributor's editor drops in .vscode/ stays local — Task 14.1)
 .vscode/*
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/tasks.json
+
+# Extension Development Host scratch state (separate user-data/extensions areas used by the
+# "Run Extension — Clean Development Host" launch profile, so F5 never touches the normal VS Code
+# profile that has the Marketplace build installed) — covered by the .tmp/ rule above, repeated
+# here so the intent survives a future edit to that rule.
+.tmp/vscode-dev/
 
 # Backup files
 *.bak

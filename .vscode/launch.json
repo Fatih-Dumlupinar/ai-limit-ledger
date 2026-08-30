@@ -2,11 +2,36 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Codex Limit Bar",
+      "name": "Run Extension — Clean Development Host",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--user-data-dir=${workspaceFolder}/.tmp/vscode-dev/user-data",
+        "--extensions-dir=${workspaceFolder}/.tmp/vscode-dev/extensions",
+        "--disable-extensions"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "Compile"
+    },
+    {
+      "name": "Run Extension — Current Workspace",
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"]
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "Compile"
+    },
+    {
+      "name": "Debug Tests (vitest)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run"],
+      "console": "integratedTerminal",
+      "smartStep": true,
+      "skipFiles": ["<node_internals>/**"]
     }
   ]
 }

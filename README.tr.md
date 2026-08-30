@@ -56,17 +56,27 @@ Tam kaynak, hesap/oturum içgörü kapsamı ve deneysel sınırlar için [sağla
 
 ## Hızlı başlangıç
 
-Bu eklenti **henüz Visual Studio Code Marketplace'te yayınlanmamıştır**. Şu anda bir Marketplace
-listesi veya GitHub Release kurulum yolu yoktur — bu kurulum yolu, Marketplace publisher incelemesi
-sonrasında planlanmaktadır (bkz. [Yol haritası](#yol-haritası)). Şimdilik kaynaktan kurun:
+AI Limit Ledger,
+[Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger)
+üzerinde `fatihdumlupinar-dev.ai-limit-ledger` kimliğiyle yayınlanmıştır. Bu bir **önizleme
+(preview)** sürümüdür — bkz. [Bilinen sınırlamalar](#bilinen-sınırlamalar).
 
-1. Bu repository'yi klonlayın ve bir `.vsix` paketi oluşturmak için [Geliştirme kurulumu](#geliştirme-kurulumu) bölümünü izleyin.
-2. Codex CLI'yi (veya kullandığınız hangi sağlayıcı ise) kurun ve oturum açın.
-3. Oluşturulan paketi kurun:
+İki yoldan biriyle kurabilirsiniz:
 
-   ```powershell
-   code --install-extension ai-limit-ledger-<version>.vsix
-   ```
+- **Marketplace arayüzünden** — `Ctrl+Shift+X` (macOS'ta `Cmd+Shift+X`) tuşlarına basın,
+  `@id:fatihdumlupinar-dev.ai-limit-ledger` araması yapın ve **Install**'a tıklayın.
+- **Komut satırından**:
+
+  ```powershell
+  code --install-extension "fatihdumlupinar-dev.ai-limit-ledger"
+  ```
+
+Ardından Codex CLI'yi (veya kullandığınız hangi sağlayıcı ise) kurup oturum açın; durum çubuğu bir
+sonraki yenilemede raporlamaya başlar.
+
+Eklentiyi kaynaktan derlemek isteyen katkıda bulunanlar için
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) belgesine bakın — bu yol geliştirme içindir, normal
+kullanım amacıyla kurulum için değildir.
 
 Webview kullanmayan bir ayrıntı görünümü için `AI Limit Ledger: Select Dashboard Mode` komutunu çalıştırıp `Safe Native` seçin, ardından `AI Limit Ledger: Open Dashboard` çalıştırın. Safe Dashboard, salt okunur bir metin editörü belgesi olarak açılır ve Webview veya Service Worker API'si kullanmaz.
 
@@ -283,7 +293,16 @@ npm ci
 npm run compile
 ```
 
-Ardından bir geliştirme penceresinde denemek için `F5` (veya VS Code'un "Run Extension" başlatma yapılandırması) ile eklenti barındırıcısını başlatın.
+Ardından `F5` tuşuna basıp **Run Extension — Clean Development Host** profilini seçin. Bu profil,
+çalışma ağacındaki derlemeyi, gitignore'lanmış `.tmp/vscode-dev/` altındaki kendi user-data ve
+extensions alanlarıyla ayrı bir Extension Development Host penceresinde çalıştırır; böylece normal
+VS Code profiliniz kararlı Marketplace sürümünü çalıştırmayı sürdürür ve hata ayıklama penceresine
+hiçbir gerçek kimlik bilgisi veya ayar taşınmaz.
+
+Tam kılavuz [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) belgesindedir: araç zinciri kurulumu, hata
+ayıklama ve kesme noktaları, tek bir testi çalıştırma, watch modu, tam yerel kontrol, VSIX derleme
+ve izole bir profilde duman testi, normal profil ile Development Host ayrımı, ve branch, pull
+request ve sürüm akışı.
 
 ## Test / build komutları
 
@@ -309,7 +328,9 @@ Bir güvenlik açığı için herkese açık bir issue açmayın. Özel olarak n
 
 ## Bilinen sınırlamalar
 
-- Henüz Visual Studio Code Marketplace'te yayınlanmadı; yalnızca kaynaktan kurulum.
+- **Önizleme (preview)** sürümü olarak yayınlanmıştır: manifest'te `"preview": true` korunur ve
+  GitHub Release'leri ön sürüm olarak işaretlenir; davranış ve ayarlar sürümler arasında hâlâ
+  değişebilir.
 - Claude'un CLI'siz OAuth kullanım kontrolü, Grok'un deneysel `x.ai/billing` capability'si ve Grok'un CLI-proxy faturalama yedeği ikisi de **deneyseldir**, varsayılan olarak kapalıdır veya isteğe bağlıdır ve haber verilmeden değişebilecek veya çalışmayı durdurabilecek belgelenmemiş sağlayıcı uç noktalarına bağımlıdır.
 - Claude'un en son oturum içgörüsü yalnızca en son gözlemlenen CLI oturumunu yansıtır, oturumlar arasında hesap genelinde bir toplamı değil.
 - GitHub Copilot organizasyon tarafından yönetilen hesaplarda kişisel bir ödenek hiç görünmeyebilir; faturalama da bireysel Copilot isteklerinin gerisinde kalabilir ve Dashboard ikisini de tahmin etmek yerine açıkça belirtir.
@@ -322,9 +343,9 @@ Bir güvenlik açığı için herkese açık bir issue açmayın. Özel olarak n
 Aşağıdaki öğeler **planlanmıştır, taahhüt edilmemiştir** ve değişebilir:
 
 - Task 12 PR'ı incelendikten sonra ek branch koruması/ruleset yapılandırması.
-- `docs/MARKETPLACE-PREFLIGHT.md` kontrol listesi tamamlandıktan sonra, GitHub Release tabanlı bir
-  kurulum yolu ile bir Visual Studio Code Marketplace yayını. Ekran görüntüleri isteğe bağlı, ayrı
-  bir iyileştirmedir (bkz. [Ekran görüntüleri](#ekran-görüntüleri)) ve bunun ön koşulu değildir.
+- Sağlayıcı entegrasyonları tam bir sürüm döngüsü boyunca gerçek kullanımda test edildikten sonra
+  önizleme durumundan çıkılması. Marketplace listesindeki ekran görüntüleri isteğe bağlı, ayrı bir
+  iyileştirme olmayı sürdürür (bkz. [Ekran görüntüleri](#ekran-görüntüleri)).
 - Gelecekte ek sağlayıcı desteği değerlendirilebilir; şu anda Codex, Claude Code, GitHub Copilot ve Grok'un ötesinde hiçbir şey planlanmamış veya uygulanmamıştır.
 
 ## Bağlantısızlık bildirimi

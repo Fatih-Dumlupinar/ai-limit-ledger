@@ -1,0 +1,32 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "eslint.enable": true,
+  "eslint.useFlatConfig": true,
+  "eslint.validate": ["typescript", "javascript"],
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": false,
+  "editor.insertSpaces": true,
+  "editor.tabSize": 2,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.exclude": {
+    "**/.git": true,
+    "out": true,
+    "node_modules": true,
+    ".tmp": true
+  },
+  "search.exclude": {
+    "out": true,
+    "node_modules": true,
+    ".tmp": true,
+    "package-lock.json": true
+  },
+  "files.watcherExclude": {
+    "**/out/**": true,
+    "**/node_modules/**": true,
+    "**/.tmp/**": true
+  },
+  "testing.automaticallyOpenTestResults": "neverOpen"
+}

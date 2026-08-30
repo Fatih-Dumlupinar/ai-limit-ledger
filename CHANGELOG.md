@@ -2,6 +2,65 @@
 
 ## [Unreleased]
 
+## 0.7.1
+
+- **Task 14.1 — Reusable release process and complete development environment.** No provider,
+  runtime, status bar, or dashboard behavior change. The Marketplace upload stays manual and
+  owner-performed; GitHub Actions automates only build, audit, and the post-verification GitHub
+  Release.
+  - Generalized `.github/workflows/release-candidate.yml` and
+    `.github/workflows/finalize-release.yml` off their hardcoded `0.7.0` constants so they are
+    reusable for every future version. Both keep every existing hardening property:
+    `workflow_dispatch`-only, `main`-only, exact `origin/main` commit verification, minimum
+    permissions, SHA-pinned actions, `persist-credentials: false`, `npm ci`, the full
+    compile/lint/format/workflow-verify/audit/test chain, VSIX packaging with a packaged-VSIX
+    audit, checksum, SBOM, release manifest, provenance attestation, and bounded artifact
+    retention.
+  - The `version` dispatch input is validated against a single anchored grammar,
+    `^[0-9]+\.[0-9]+\.[0-9]+$`, in the first step that touches it, and only re-exported once it
+    passes. A `v` prefix, a two-part `0.7`, a prerelease (`-beta`) or build-metadata (`+build`)
+    suffix, `latest`/`main`, an empty value, or a shell metacharacter fails the run before the
+    value can reach a file path, a jq filter, an artifact name, or a ref name. Every dispatch
+    input arrives through `env:` and is never interpolated into a `run:` body.
+  - The Marketplace confirmation phrase is now derived from the validated version
+    (`I_HAVE_VERIFIED_MARKETPLACE_<version>`) rather than frozen to one release, so a previous
+    release's confirmation can never finalize the next version.
+  - `Release Candidate` now refuses to build for a version whose release ref already exists, and
+    requires the `CHANGELOG.md` section for the version, a non-empty
+    `docs/RELEASE-NOTES-<version>.md`, and a preserved `[Unreleased]` section before packaging.
+    It still creates no ref, no release, and no publish of any kind.
+  - `Finalize Release` now additionally verifies that the candidate artifact contains exactly the
+    five expected files and nothing else, alongside the existing candidate-run, hash, manifest,
+    publisher, extension-ID, and `main`-ancestry verification. Tag/release handling remains
+    idempotent and fail-closed: an existing ref on the right commit is untouched, an existing ref
+    on any other commit aborts the run, and no asset is ever overwritten.
+  - Extended `scripts/verify-workflows.mjs`: the exact strict-SemVer pattern must be present in
+    both release workflows, a literal version constant in a release workflow is now an error, the
+    confirmation phrase must be derived rather than hardcoded, `contents: write` / `actions: read`
+    are pinned to the finalize job and `id-token: write` / `attestations: write` to the candidate
+    build job, every checkout must set `persist-credentials: false`, and `VSCE_PAT`, Azure DevOps /
+    Marketplace / OpenVSX tokens, `vsce login`, `--oidc`, and Azure federated-login references are
+    forbidden in every workflow.
+  - Added a complete VS Code development environment: `.vscode/launch.json` gains
+    **Run Extension — Clean Development Host** (isolated `--user-data-dir` and `--extensions-dir`
+    under the gitignored `.tmp/vscode-dev/`, resolved through `${workspaceFolder}`), plus a
+    current-workspace profile and a vitest debug profile; `.vscode/tasks.json` adds twelve
+    npm-script-backed tasks including `Full Local Check` and no publish/release task;
+    `.vscode/extensions.json` recommends only ESLint, Prettier, and the official GitHub Actions
+    extension; `.vscode/settings.json` adds workspace-scoped settings only.
+  - Added the `test:watch`, `audit:release:packaged`, and `check:local` npm scripts, and extended
+    `scripts/release-audit.mjs` with development-environment policy checks: launch/tasks/settings/
+    recommendation validation, no absolute user path or credential-shaped content in any editor
+    configuration, `.tmp/` gitignored, and `.vscode/**` plus `.tmp/**` excluded from the VSIX.
+  - Added `docs/DEVELOPMENT.md` and linked it from `README.md`, `README.tr.md`, and
+    `CONTRIBUTING.md`.
+  - Corrected the now-stale "not yet published to the Marketplace / install from source" guidance
+    in `README.md` and `README.tr.md`, which became wrong when 0.7.0 went live. Both READMEs now
+    lead with the Marketplace UI (`@id:fatihdumlupinar-dev.ai-limit-ledger`) and CLI
+    (`code --install-extension "fatihdumlupinar-dev.ai-limit-ledger"`) install paths, keep
+    build-from-source as a contributor path, and preserve every non-affiliation, privacy, provider
+    limitation, and preview disclaimer.
+
 ## 0.7.0
 
 - **Task 14 — Secure release system and first Marketplace release preparation.** First Marketplace
