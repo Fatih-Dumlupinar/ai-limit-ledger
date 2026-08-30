@@ -4,6 +4,10 @@ Thanks for your interest in contributing. This project is a privacy-first VS Cod
 
 ## Development setup
 
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) is the full development guide — toolchain, F5
+debugging in an isolated Extension Development Host, tasks, single-test and watch runs, VSIX build
+and isolated smoke test, and the release flow. Read it first; the summary below is the minimum.
+
 - **Node**: 24 LTS preferred, Node 22 minimum (see `.nvmrc`/`.node-version` and `package.json`'s `engines.node`). Node 20 is end-of-life and unsupported.
 - Install dependencies from the lockfile, never a fresh resolve:
 
@@ -21,6 +25,9 @@ Thanks for your interest in contributing. This project is a privacy-first VS Cod
   npm test
   npm run audit:release
   ```
+
+`npm run check:local` runs that whole chain (plus `npm audit`, VSIX packaging, and the
+packaged-VSIX audit) in one command, and is also available as the **Full Local Check** task.
 
 Run the full chain above before opening a pull request. `npm run audit:release` (`scripts/release-audit.mjs`) is this project's own dependency-free, offline check for manifest/lockfile consistency, absolute-path and credential-shaped patterns, and (when pointed at a built `.vsix`) packaging content — it is separate from `npm audit`, which requires registry network access; both matter but they check different things.
 

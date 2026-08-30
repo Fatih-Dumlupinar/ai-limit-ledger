@@ -36,8 +36,15 @@ describe('Task 14: finalize-release.yml workflow policy', () => {
     }
   });
 
-  it('requires the exact Marketplace confirmation phrase', () => {
-    expect(source).toContain('I_HAVE_VERIFIED_MARKETPLACE_0.7.0');
+  it('requires a version-scoped Marketplace confirmation phrase, derived not hardcoded', () => {
+    expect(source).toContain('I_HAVE_VERIFIED_MARKETPLACE_');
+    expect(source).toContain('expected_confirmation="${CONFIRMATION_PREFIX}${INPUT_VERSION}"');
+    // A frozen phrase would keep accepting the previous release's confirmation for the next
+    // version, so only a `description:` example may carry a concrete version.
+    for (const line of source.split('\n')) {
+      if (/^\s*description:/.test(line)) continue;
+      expect(line).not.toMatch(/I_HAVE_VERIFIED_MARKETPLACE_\d+\.\d+\.\d+/);
+    }
   });
 
   it('requires the exact Marketplace listing URL', () => {

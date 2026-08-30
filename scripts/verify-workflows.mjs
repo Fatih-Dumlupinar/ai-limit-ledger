@@ -57,6 +57,62 @@ const WORKFLOW_NAMES = {
   'finalize-release.yml': 'Finalize Release',
 };
 
+/**
+ * The single strict version grammar shared by both release workflows (Task 14.1).
+ *
+ * Both `release-candidate.yml` and `finalize-release.yml` validate their `version` dispatch input
+ * against this exact anchored pattern in a shell step, before the value is used to build a file
+ * path, a jq filter, an artifact name, a ref name, or a confirmation phrase. It is exported here
+ * so the policy verifier can assert that the literal pattern is still present in each workflow,
+ * and so tests can exercise the accept/reject behaviour directly instead of only structurally.
+ *
+ * Accepts exactly `major.minor.patch` (0.7.1, 1.0.0, 2.4.12). Rejects a `v` prefix, a two-part
+ * `0.7`, any prerelease (`-beta`) or build-metadata (`+build`) suffix, `latest`/`main`, the empty
+ * string, leading/trailing whitespace, and anything carrying a shell metacharacter.
+ */
+export const STRICT_SEMVER_SOURCE = '^[0-9]+\\.[0-9]+\\.[0-9]+$';
+
+/** The literal ERE text both workflows must contain, so a weakened regex is caught structurally. */
+export const STRICT_SEMVER_SHELL_PATTERN = "'^[0-9]+\\.[0-9]+\\.[0-9]+$'";
+
+/** Pure predicate mirroring the workflows' shell-side `grep -Eq` gate. */
+export function isStrictReleaseVersion(value) {
+  if (typeof value !== 'string') return false;
+  return new RegExp(STRICT_SEMVER_SOURCE).test(value);
+}
+
+/** The Marketplace confirmation phrase is derived, never hardcoded — see finalize-release.yml. */
+export const MARKETPLACE_CONFIRMATION_PREFIX = 'I_HAVE_VERIFIED_MARKETPLACE_';
+
+/**
+ * Builds the exact confirmation phrase a human must type to finalize `version`.
+ * Refuses to build a phrase for a version that has not passed the strict gate, so a malformed
+ * version can never be smuggled through the phrase comparison.
+ */
+export function buildMarketplaceConfirmation(version) {
+  if (!isStrictReleaseVersion(version)) {
+    throw new Error('confirmation phrase requires a strict major.minor.patch version');
+  }
+  return `${MARKETPLACE_CONFIRMATION_PREFIX}${version}`;
+}
+
+export const EXPECTED_MARKETPLACE_URL =
+  'https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger';
+
+/** Credential/publishing identifiers that must never appear in any workflow in this repository. */
+export const FORBIDDEN_PUBLISH_CREDENTIAL_PATTERNS = [
+  { name: 'VSCE_PAT', pattern: /VSCE_PAT/i },
+  { name: 'Azure DevOps PAT', pattern: /AZURE_DEVOPS_(?:EXT_)?PAT|ADO_PAT/i },
+  {
+    name: 'Marketplace/publisher token',
+    pattern: /MARKETPLACE_(?:TOKEN|PAT)|PUBLISHER_(?:TOKEN|PAT)/i,
+  },
+  { name: 'OpenVSX token', pattern: /OVSX_PAT|OPEN_?VSX_TOKEN/i },
+  { name: 'vsce login', pattern: /vsce\s+login/i },
+  { name: 'OIDC publish flag', pattern: /--oidc\b/i },
+  { name: 'Azure federated login', pattern: /azure\/login|azure-credentials|managed[-_]identity/i },
+];
+
 // These two release workflows are manually dispatched only — never on pull_request/push/schedule
 // — so they are checked against an exact single-trigger allowlist, the same way
 // dependency-review.yml is restricted to pull_request only (see validateTriggers).
@@ -719,13 +775,29 @@ function validateFinalizeRelease(document, errors) {
       issue(errors, 'finalize-release.yml', `a required "${name}" input is required`);
   }
   const fullText = workflowStrings(document);
-  if (!fullText.includes('I_HAVE_VERIFIED_MARKETPLACE_0.7.0'))
-    issue(errors, 'finalize-release.yml', 'exact Marketplace confirmation phrase is required');
-  if (
-    !fullText.includes(
-      'https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger',
-    )
-  )
+  // The confirmation phrase is version-scoped and must be *derived* from the validated version
+  // (I_HAVE_VERIFIED_MARKETPLACE_<version>), never frozen to one release — a hardcoded phrase would
+  // silently keep accepting last release's confirmation for the next version's finalization.
+  if (!fullText.includes(MARKETPLACE_CONFIRMATION_PREFIX))
+    issue(
+      errors,
+      'finalize-release.yml',
+      'version-scoped Marketplace confirmation phrase prefix is required',
+    );
+  // A `description:` may still show a worked example for the human dispatching the workflow; what
+  // must never be frozen is the value the workflow actually compares against.
+  const hardcodedPhrase = new RegExp(`${MARKETPLACE_CONFIRMATION_PREFIX}[0-9]+\\.[0-9]+\\.[0-9]+`);
+  for (const location of document.locations) {
+    if (location.key === 'description' || typeof location.value !== 'string') continue;
+    if (hardcodedPhrase.test(location.value))
+      issue(
+        errors,
+        'finalize-release.yml',
+        'Marketplace confirmation phrase must be derived from the validated version, not hardcoded to one release',
+        location.line,
+      );
+  }
+  if (!fullText.includes(EXPECTED_MARKETPLACE_URL))
     issue(errors, 'finalize-release.yml', 'exact Marketplace listing URL is required');
   for (const command of ['gh run view', 'gh run download', 'gh release create', 'gh api']) {
     if (!text.includes(command))
@@ -733,6 +805,138 @@ function validateFinalizeRelease(document, errors) {
   }
   if (text.includes('--force') || text.includes('--clobber'))
     issue(errors, 'finalize-release.yml', 'force/overwrite operations are forbidden');
+  // The candidate run id and commit SHA are attacker-influenceable dispatch inputs, so each needs
+  // its own anchored allowlist before it reaches `gh run view` / `git merge-base`.
+  if (!fullText.includes("'^[0-9]+$'"))
+    issue(
+      errors,
+      'finalize-release.yml',
+      'candidate_run_id must be validated as a positive integer',
+    );
+  if (!fullText.includes("'^[0-9a-f]{40}$'"))
+    issue(
+      errors,
+      'finalize-release.yml',
+      'commit_sha must be validated as a full 40-character lowercase hex SHA',
+    );
+  if (!fullText.includes('merge-base --is-ancestor'))
+    issue(
+      errors,
+      'finalize-release.yml',
+      'candidate commit must be proven to be part of main history',
+    );
+  for (const marker of ['SHA256SUMS.txt', 'release-manifest.json', 'sha256sum']) {
+    if (!fullText.includes(marker))
+      issue(errors, 'finalize-release.yml', `artifact integrity check is missing ${marker}`);
+  }
+  if (!/refusing to move it/i.test(fullText))
+    issue(
+      errors,
+      'finalize-release.yml',
+      'an existing release ref on a different commit must fail closed rather than be moved',
+    );
+  if (!/no overwrite/i.test(fullText))
+    issue(errors, 'finalize-release.yml', 'existing release assets must never be overwritten');
+}
+
+// ---------------------------------------------------------------------------
+// Task 14.1: reusable-release security invariants
+//
+// Both release workflows became version-generic in Task 14.1. These checks are what keeps that
+// generalization safe: the version is the only human-supplied value that reaches a path, a filter,
+// a ref name, or a confirmation phrase, so every workflow that accepts one must gate it behind the
+// same anchored grammar, must not carry a frozen version constant that would silently disagree
+// with the input, and must never gain a publishing credential of any shape.
+// ---------------------------------------------------------------------------
+
+function validateReleaseWorkflowSecurity(file, document, errors) {
+  const text = workflowStrings(document);
+  const isReleaseWorkflow = WORKFLOW_DISPATCH_ONLY_WORKFLOWS.includes(file);
+
+  for (const { name, pattern } of FORBIDDEN_PUBLISH_CREDENTIAL_PATTERNS) {
+    if (pattern.test(text))
+      issue(errors, file, `Marketplace publishing credential/flag is forbidden [${name}]`);
+  }
+
+  if (!isReleaseWorkflow) return;
+
+  if (!text.includes(STRICT_SEMVER_SHELL_PATTERN))
+    issue(
+      errors,
+      file,
+      'release workflow must validate its version input against the exact strict SemVer pattern',
+    );
+
+  // A leftover `EXPECTED_VERSION: 0.7.0`-style constant is exactly the bug Task 14.1 removes: it
+  // makes the workflow silently single-version again while still advertising a version input.
+  for (const location of document.locations) {
+    if (typeof location.value !== 'string') continue;
+    if (!/^\d+\.\d+\.\d+$/.test(location.value.trim())) continue;
+    if (location.key === 'uses' || location.key === 'node-version') continue;
+    issue(
+      errors,
+      file,
+      `release workflow must not pin a literal version constant (${location.key})`,
+      location.line,
+    );
+  }
+
+  // Checkout must never leave a usable credential in .git/config for later steps to reuse.
+  const checkoutSteps = findValues(document.value, 'uses').filter(
+    (value) => typeof value === 'string' && value.startsWith('actions/checkout@'),
+  );
+  if (checkoutSteps.length > 0) {
+    const persist = findValues(document.value, 'persist-credentials');
+    if (persist.length !== checkoutSteps.length || persist.some((value) => value !== false))
+      issue(errors, file, 'every checkout must set persist-credentials: false');
+  }
+
+  if (file === 'release-candidate.yml') {
+    // The candidate stage is build-and-attest only: it must be structurally incapable of creating
+    // a ref, a release, or a Marketplace upload, so a mis-dispatch can never publish anything.
+    if (/\bgit\s+(?:tag|push|commit)\b/i.test(text))
+      issue(errors, file, 'release candidate must never create a ref, a commit, or a push');
+    if (/gh\s+(?:release|api)\b/i.test(text))
+      issue(errors, file, 'release candidate must never call the releases API');
+    for (const marker of ['CHANGELOG.md', 'RELEASE-NOTES-', 'refs/tags/']) {
+      if (!text.includes(marker))
+        issue(errors, file, `release candidate preflight is missing its ${marker} check`);
+    }
+  }
+}
+
+// Job-scoped elevation allowlist: each elevated permission is granted to exactly one job in exactly
+// one workflow, so a future edit cannot quietly widen (say) `contents: write` to the build job.
+const JOB_PERMISSION_SCOPE = {
+  'contents:write': { file: 'finalize-release.yml', job: 'finalize' },
+  'actions:read': { file: 'finalize-release.yml', job: 'finalize' },
+  'id-token:write': { file: 'release-candidate.yml', job: 'build' },
+  'attestations:write': { file: 'release-candidate.yml', job: 'build' },
+};
+
+function validatePermissionScopes(file, document, errors) {
+  const jobs = document.value?.jobs;
+  if (!jobs || typeof jobs !== 'object') return;
+  for (const [jobId, job] of Object.entries(jobs)) {
+    const permissions = job?.permissions;
+    if (!permissions || typeof permissions !== 'object') continue;
+    for (const [permission, level] of Object.entries(permissions)) {
+      const scope = JOB_PERMISSION_SCOPE[`${permission}:${level}`];
+      if (!scope) continue;
+      if (scope.file !== file || scope.job !== jobId)
+        issue(
+          errors,
+          file,
+          `${permission}: ${level} is reserved for the ${scope.job} job in ${scope.file}`,
+        );
+    }
+  }
+  for (const [key, scope] of Object.entries(JOB_PERMISSION_SCOPE)) {
+    if (scope.file !== file) continue;
+    const [permission, level] = key.split(':');
+    if (jobs[scope.job]?.permissions?.[permission] !== level)
+      issue(errors, file, `job ${scope.job} must declare ${permission}: ${level}`);
+  }
 }
 
 function validateNoRuntimeImports(document, errors, file) {
@@ -746,7 +950,9 @@ export function inspectWorkflow(file, source) {
   const errors = [];
   validateCommonWorkflow(file, document, errors);
   validatePermissions(file, document, errors);
+  validatePermissionScopes(file, document, errors);
   validateTriggers(file, document, errors);
+  validateReleaseWorkflowSecurity(file, document, errors);
   if (file === 'ci.yml') validateCi(document, errors);
   if (file === 'codeql.yml') validateCodeql(document, errors);
   if (file === 'secret-scan.yml') validateSecretScan(document, errors);

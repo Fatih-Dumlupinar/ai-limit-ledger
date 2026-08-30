@@ -426,6 +426,12 @@ export const VSIX_DENYLIST_PATTERNS = [
   // extension (Task 13).
   /^extension\/test\//,
   /^extension\/\.github\//,
+  // Editor development configuration and Extension Development Host scratch state (Task 14.1) —
+  // launch/tasks/settings/extension recommendations are contributor tooling, and .tmp/vscode-dev
+  // holds a debugging session's own user-data/extensions areas (including SecretStorage for the
+  // extension under test). Neither belongs anywhere near an installable package.
+  /^extension\/\.vscode\//,
+  /^extension\/\.tmp\//,
   // Editor/agent-tooling scratch state (e.g. a local Claude Code session lock file) — never part
   // of the project's source and must never leak into a packaged VSIX (Task 13.1 found this
   // actually happening: an untracked, globally-gitignored `.claude/scheduled_tasks.lock` was
@@ -667,10 +673,11 @@ function reportHashes(vsixResult) {
 export const EXPECTED_MARKETPLACE_PUBLISHER = 'fatihdumlupinar-dev';
 export const EXPECTED_PACKAGE_NAME = 'ai-limit-ledger';
 export const EXPECTED_EXTENSION_ID = `${EXPECTED_MARKETPLACE_PUBLISHER}.${EXPECTED_PACKAGE_NAME}`;
-// Task 14 is the deliberate, separate version-bump task referenced by the Task 13 comment this
-// replaces: it raises the first Marketplace release to 0.7.0. Update this constant only as part
-// of a deliberate version-bump task — never as a side effect of an unrelated change.
-export const EXPECTED_TASK_VERSION = '0.7.0';
+// Task 14.1 is the deliberate, separate version-bump task following Task 14's first Marketplace
+// release (0.7.0): it raises the version to 0.7.1 for the reusable manual-Marketplace /
+// automated-GitHub-Release model. Update this constant only as part of a deliberate version-bump
+// task — never as a side effect of an unrelated change.
+export const EXPECTED_TASK_VERSION = '0.7.1';
 
 export const PLACEHOLDER_PUBLISHER_VALUES = new Set([
   'local',
@@ -1238,11 +1245,351 @@ function checkPackagedReadmeImages(vsixResult) {
 }
 
 // ---------------------------------------------------------------------------
+// 10. Development-environment policy (Task 14.1)
+//
+// The repository now ships a full .vscode development configuration. None of it belongs in the
+// installed extension, and none of it may carry a developer's identity, a credential, a real
+// provider setting, or a path outside the repository. These checks make that policy enforceable
+// rather than a convention: the packaging exclusions are asserted here as well as in
+// .vscodeignore, so a regression in one is caught by the other.
+// ---------------------------------------------------------------------------
+
+export const RECOMMENDED_EXTENSION_ALLOWLIST = new Set([
+  'dbaeumer.vscode-eslint',
+  'esbenp.prettier-vscode',
+  'github.vscode-github-actions',
+]);
+
+/** Workspace settings that would reach outside the workspace or carry real provider/user state. */
+export const FORBIDDEN_WORKSPACE_SETTING_PATTERNS = [
+  { name: 'provider executable path', pattern: /^aiLimitLedger\..*[Ee]xecutablePath$/ },
+  { name: 'real provider setting', pattern: /^aiLimitLedger\./ },
+  { name: 'personal auto-save preference', pattern: /^files\.autoSave/ },
+  {
+    name: 'terminal environment/PATH override',
+    pattern: /^terminal\.integrated\.(env|profiles|defaultProfile)/,
+  },
+  { name: 'credential-shaped setting', pattern: /token|secret|password|credential|apiKey/i },
+];
+
+export const DEV_HOST_TMP_ROOT = '.tmp/vscode-dev';
+
+/**
+ * Validates the parsed `.vscode/launch.json` against the Development Host isolation policy — pure
+ * (no filesystem access, no `record()` side effect) so tests can exercise it against synthetic
+ * configurations. Returns human-readable issue strings; empty means the configuration passes.
+ */
+export function validateLaunchConfiguration(launch) {
+  const issues = [];
+  const configurations = Array.isArray(launch?.configurations) ? launch.configurations : [];
+  if (configurations.length === 0) return ['launch.json declares no configurations'];
+
+  const clean = configurations.find((c) => /Clean Development Host/i.test(String(c?.name ?? '')));
+  if (!clean) issues.push('no "Run Extension — Clean Development Host" configuration found');
+
+  for (const configuration of configurations) {
+    const args = Array.isArray(configuration?.args) ? configuration.args.map(String) : [];
+    const serialized = JSON.stringify(configuration);
+    for (const pattern of ABSOLUTE_PATH_PATTERNS) {
+      pattern.lastIndex = 0;
+      if (pattern.test(serialized)) {
+        issues.push(`${configuration?.name}: contains an absolute user path`);
+      }
+    }
+    for (const { name, pattern } of CREDENTIAL_PATTERNS) {
+      pattern.lastIndex = 0;
+      if (pattern.test(serialized))
+        issues.push(`${configuration?.name}: credential-shaped content [${name}]`);
+    }
+    if (configuration?.type === 'extensionHost') {
+      if (!args.some((a) => a.startsWith('--extensionDevelopmentPath='))) {
+        issues.push(`${configuration?.name}: missing --extensionDevelopmentPath`);
+      }
+      for (const arg of args) {
+        // Only the three documented Extension Development Host path/isolation switches plus
+        // --disable-extensions are allowed; anything else would be an invented or unsupported flag.
+        if (
+          !/^--(?:extensionDevelopmentPath|user-data-dir|extensions-dir)=/.test(arg) &&
+          arg !== '--disable-extensions'
+        ) {
+          issues.push(
+            `${configuration?.name}: unsupported Extension Development Host argument "${arg}"`,
+          );
+        }
+      }
+    }
+  }
+
+  if (clean) {
+    const args = Array.isArray(clean.args) ? clean.args.map(String) : [];
+    for (const flag of ['--user-data-dir', '--extensions-dir']) {
+      const arg = args.find((a) => a.startsWith(`${flag}=`));
+      if (!arg) {
+        issues.push(`Clean Development Host: missing ${flag} isolation`);
+        continue;
+      }
+      const value = arg.slice(flag.length + 1);
+      if (!value.startsWith('${workspaceFolder}/')) {
+        issues.push(`${flag} must be resolved through \${workspaceFolder}, never an absolute path`);
+      }
+      if (!value.includes(DEV_HOST_TMP_ROOT)) {
+        issues.push(`${flag} must live under the gitignored ${DEV_HOST_TMP_ROOT}/ area`);
+      }
+    }
+  }
+  return issues;
+}
+
+/**
+ * Validates the parsed `.vscode/tasks.json`: every required development task exists, tasks delegate
+ * to npm rather than re-implementing command logic, and no task can publish or release anything.
+ * Pure, for the same testability reason as `validateLaunchConfiguration`.
+ */
+export const REQUIRED_TASK_LABELS = [
+  'Install Dependencies',
+  'Compile',
+  'Watch',
+  'Test',
+  'Test Watch',
+  'Lint',
+  'Format Check',
+  'Verify Workflows',
+  'npm Audit',
+  'Release Audit',
+  'Package VSIX',
+  'Full Local Check',
+];
+
+export function validateTasksConfiguration(tasks, packageScripts = {}) {
+  const issues = [];
+  const entries = Array.isArray(tasks?.tasks) ? tasks.tasks : [];
+  const labels = entries.map((t) => String(t?.label ?? ''));
+  for (const required of REQUIRED_TASK_LABELS) {
+    if (!labels.includes(required)) issues.push(`required task "${required}" is missing`);
+  }
+  for (const task of entries) {
+    // A publish can hide either in a single command string or split across an args array, so the
+    // invocation is normalized back into one whitespace-joined line before matching.
+    const invocation = [task?.command, ...(Array.isArray(task?.args) ? task.args : [])]
+      .filter((part) => typeof part === 'string')
+      .join(' ');
+    const serialized = `${JSON.stringify(task)}\n${invocation}`;
+    if (PUBLISH_INVOCATION_PATTERN.test(serialized) || /gh\s+release|git\s+tag/i.test(serialized)) {
+      issues.push(`task "${task?.label}" must never publish or release`);
+    }
+    if (task?.type === 'npm') {
+      if (!Object.prototype.hasOwnProperty.call(packageScripts, String(task.script))) {
+        issues.push(`task "${task?.label}" references missing npm script "${task?.script}"`);
+      }
+    } else if (task?.type === 'shell') {
+      // A shell task is allowed only to invoke npm itself (npm ci / npm audit have no script
+      // wrapper); it must never carry bespoke command logic that duplicates a package.json script.
+      if (task.command !== 'npm') {
+        issues.push(`task "${task?.label}" must invoke npm, not a bespoke command`);
+      }
+    } else {
+      issues.push(`task "${task?.label}" has an unexpected type "${task?.type}"`);
+    }
+    // A watch-style task must be marked background and instance-limited, or F5 stacks up
+    // never-exiting tsc/vitest processes.
+    if (/watch/i.test(String(task?.label))) {
+      if (task?.isBackground !== true)
+        issues.push(`task "${task?.label}" must be a background task`);
+      if (task?.runOptions?.instanceLimit !== 1) {
+        issues.push(`task "${task?.label}" must limit itself to one running instance`);
+      }
+    }
+  }
+  return issues;
+}
+
+function readJsonIfPresent(relPath) {
+  const full = path.join(ROOT, relPath);
+  if (!existsSync(full)) return undefined;
+  return JSON.parse(readFileSync(full, 'utf8'));
+}
+
+function checkDevelopmentEnvironment() {
+  const pkg = readJson('package.json');
+
+  let launch;
+  try {
+    launch = readJsonIfPresent('.vscode/launch.json');
+  } catch {
+    record('dev-env-launch-config', 'fail', '.vscode/launch.json is not valid JSON.');
+  }
+  if (launch === undefined) {
+    record('dev-env-launch-config', 'fail', '.vscode/launch.json is missing.');
+  } else if (launch) {
+    const issues = validateLaunchConfiguration(launch);
+    if (issues.length === 0) {
+      record(
+        'dev-env-launch-config',
+        'pass',
+        `Debug profiles are valid and the Clean Development Host is isolated under ${DEV_HOST_TMP_ROOT}/.`,
+      );
+    } else {
+      record('dev-env-launch-config', 'fail', 'Launch configuration policy violation(s)', issues);
+    }
+  }
+
+  let tasks;
+  try {
+    tasks = readJsonIfPresent('.vscode/tasks.json');
+  } catch {
+    record('dev-env-tasks-config', 'fail', '.vscode/tasks.json is not valid JSON.');
+  }
+  if (tasks === undefined) {
+    record('dev-env-tasks-config', 'fail', '.vscode/tasks.json is missing.');
+  } else if (tasks) {
+    const issues = validateTasksConfiguration(tasks, pkg.scripts ?? {});
+    if (issues.length === 0) {
+      record(
+        'dev-env-tasks-config',
+        'pass',
+        `${REQUIRED_TASK_LABELS.length} required development tasks present; none can publish or release.`,
+      );
+    } else {
+      record('dev-env-tasks-config', 'fail', 'Task configuration policy violation(s)', issues);
+    }
+  }
+
+  let recommendations;
+  try {
+    recommendations = readJsonIfPresent('.vscode/extensions.json');
+  } catch {
+    record(
+      'dev-env-extension-recommendations',
+      'fail',
+      '.vscode/extensions.json is not valid JSON.',
+    );
+  }
+  if (recommendations === undefined) {
+    record('dev-env-extension-recommendations', 'fail', '.vscode/extensions.json is missing.');
+  } else if (recommendations) {
+    const listed = Array.isArray(recommendations.recommendations)
+      ? recommendations.recommendations
+      : [];
+    const issues = listed
+      .filter((id) => !RECOMMENDED_EXTENSION_ALLOWLIST.has(String(id)))
+      .map((id) => `"${id}" is not on the development-extension allowlist`);
+    // The published extension is what a contributor's *normal* profile installs from the
+    // Marketplace — recommending it as a development dependency would blur exactly the
+    // normal-profile / Development Host separation this task establishes.
+    if (listed.some((id) => String(id) === EXPECTED_EXTENSION_ID)) {
+      issues.push(`${EXPECTED_EXTENSION_ID} must not be recommended as a development extension`);
+    }
+    if (issues.length === 0) {
+      record(
+        'dev-env-extension-recommendations',
+        'pass',
+        `${listed.length} recommended development extension(s), all on the allowlist.`,
+      );
+    } else {
+      record(
+        'dev-env-extension-recommendations',
+        'fail',
+        'Extension recommendation policy violation(s)',
+        issues,
+      );
+    }
+  }
+
+  let settings;
+  try {
+    settings = readJsonIfPresent('.vscode/settings.json');
+  } catch {
+    record('dev-env-workspace-settings', 'fail', '.vscode/settings.json is not valid JSON.');
+  }
+  if (settings === undefined) {
+    record('dev-env-workspace-settings', 'fail', '.vscode/settings.json is missing.');
+  } else if (settings) {
+    const issues = [];
+    for (const key of Object.keys(settings)) {
+      for (const { name, pattern } of FORBIDDEN_WORKSPACE_SETTING_PATTERNS) {
+        if (pattern.test(key)) issues.push(`"${key}" is a forbidden workspace setting [${name}]`);
+      }
+    }
+    const serialized = JSON.stringify(settings);
+    for (const pattern of ABSOLUTE_PATH_PATTERNS) {
+      pattern.lastIndex = 0;
+      if (pattern.test(serialized)) issues.push('workspace settings contain an absolute user path');
+    }
+    for (const { name, pattern } of CREDENTIAL_PATTERNS) {
+      pattern.lastIndex = 0;
+      if (pattern.test(serialized))
+        issues.push(`workspace settings contain credential-shaped content [${name}]`);
+    }
+    if (issues.length === 0) {
+      record(
+        'dev-env-workspace-settings',
+        'pass',
+        'Workspace settings stay workspace-scoped: no absolute path, credential, real provider setting, or terminal/PATH override.',
+      );
+    } else {
+      record(
+        'dev-env-workspace-settings',
+        'fail',
+        'Workspace settings policy violation(s)',
+        issues,
+      );
+    }
+  }
+
+  // The Development Host's user-data and extensions areas hold whatever a debugging session
+  // creates, including SecretStorage for the extension under test. They must be unreachable by
+  // both git and the packager — never committed, never shipped.
+  const gitignore = existsSync(path.join(ROOT, '.gitignore'))
+    ? readFileSync(path.join(ROOT, '.gitignore'), 'utf8')
+    : '';
+  const vscodeIgnore = existsSync(path.join(ROOT, '.vscodeignore'))
+    ? readFileSync(path.join(ROOT, '.vscodeignore'), 'utf8')
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+    : [];
+  const isolationIssues = [];
+  if (!/^\.tmp\/$/m.test(gitignore)) isolationIssues.push('.gitignore must ignore .tmp/');
+  for (const name of ['tasks.json', 'launch.json', 'settings.json', 'extensions.json']) {
+    if (!gitignore.includes(`!.vscode/${name}`)) {
+      isolationIssues.push(`.gitignore must keep .vscode/${name} tracked`);
+    }
+  }
+  for (const entry of ['.vscode/**', '.tmp/**']) {
+    if (!vscodeIgnore.includes(entry)) isolationIssues.push(`.vscodeignore must exclude ${entry}`);
+  }
+  if (isolationIssues.length === 0) {
+    record(
+      'dev-env-isolation',
+      'pass',
+      'Development Host scratch state is gitignored and the whole .vscode/ development configuration is excluded from the VSIX.',
+    );
+  } else {
+    record(
+      'dev-env-isolation',
+      'fail',
+      'Development-environment isolation policy violation(s)',
+      isolationIssues,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolves the VSIX argument. `--packaged` means "the VSIX this working tree's package.json
+ * version would produce", so the Full Local Check task can audit the packaged output without any
+ * task or script having to reconstruct the file name itself.
+ */
+export function resolveVsixArgument(argument, version) {
+  if (!argument) return undefined;
+  if (argument === '--packaged') return `${EXPECTED_PACKAGE_NAME}-${version}.vsix`;
+  return argument;
+}
+
 async function main() {
-  const vsixArg = process.argv[2];
+  const vsixArg = resolveVsixArgument(process.argv[2], readJson('package.json').version);
 
   checkVersionConsistency();
   await checkAbsoluteUserPaths();
@@ -1264,6 +1611,7 @@ async function main() {
   await checkNoPublishAutomation();
   checkNoEnvFile();
   await checkMarketplaceScreenshotAssets();
+  checkDevelopmentEnvironment();
 
   let vsixResult;
   if (vsixArg) {

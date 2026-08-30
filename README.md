@@ -56,17 +56,27 @@ See the full [provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) fo
 
 ## Quick start
 
-This extension is **not yet published to the Visual Studio Code Marketplace**. There is no
-Marketplace listing and no GitHub Release install path yet — that install path is planned for
-after the Marketplace publisher review (see [Roadmap](#roadmap)). For now, install from source:
+AI Limit Ledger is published on the
+[Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fatihdumlupinar-dev.ai-limit-ledger)
+as `fatihdumlupinar-dev.ai-limit-ledger`. It is a **preview** release — see
+[Known limitations](#known-limitations).
 
-1. Clone this repository and follow [Development setup](#development-setup) to build a `.vsix` package.
-2. Install and sign in to Codex CLI (or whichever providers you use).
-3. Install the built package:
+Install it one of two ways:
 
-   ```powershell
-   code --install-extension ai-limit-ledger-<version>.vsix
-   ```
+- **From the Marketplace UI** — press `Ctrl+Shift+X` (`Cmd+Shift+X` on macOS), search for
+  `@id:fatihdumlupinar-dev.ai-limit-ledger`, and click **Install**.
+- **From the command line**:
+
+  ```powershell
+  code --install-extension "fatihdumlupinar-dev.ai-limit-ledger"
+  ```
+
+Then install and sign in to Codex CLI (or whichever providers you use), and the status bar starts
+reporting on the next refresh.
+
+Contributors building the extension from source instead should follow
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — that path is for development, not for installing the
+extension for normal use.
 
 For a Webview-free details view, run `AI Limit Ledger: Select Dashboard Mode`, choose `Safe Native`, and then run `AI Limit Ledger: Open Dashboard`. The Safe Dashboard opens as a read-only text editor document and does not use Webview or Service Worker APIs.
 
@@ -280,7 +290,15 @@ npm ci
 npm run compile
 ```
 
-Then launch the extension host with `F5` (or VS Code's "Run Extension" launch configuration) to try it in a development window.
+Then press `F5` and pick **Run Extension — Clean Development Host**. That profile runs the working
+tree's build in a separate Extension Development Host with its own user-data and extensions areas
+under the gitignored `.tmp/vscode-dev/`, so your normal VS Code profile keeps running the stable
+Marketplace build and no real credential or setting is carried into the debug window.
+
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) is the full guide: toolchain setup, debugging and
+breakpoints, running a single test, watch mode, the full local check, building and smoke-testing a
+VSIX in an isolated profile, the normal-profile vs. Development Host separation, and the branch,
+pull request, and release flow.
 
 ## Test / build commands
 
@@ -306,7 +324,8 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 
 ## Known limitations
 
-- Not published on the Visual Studio Code Marketplace yet; install from source only.
+- Published as a **preview** release: the manifest keeps `"preview": true` and GitHub Releases are
+  marked pre-release, so behavior and settings may still change between versions.
 - Claude's CLI-free OAuth usage check, Grok's experimental `x.ai/billing` capability, and Grok's CLI-proxy billing fallback are **experimental**, off by default or opt-in, and depend on undocumented provider endpoints that may change or stop working without notice.
 - Claude's latest-session insight reflects the most recently observed CLI session only, not an account-wide total across sessions.
 - GitHub Copilot organization-managed accounts may not expose a personal allowance; billing can also lag behind individual Copilot requests, and the Dashboard states both explicitly rather than estimating.
@@ -319,9 +338,9 @@ Do not open a public issue for a security vulnerability. See [SECURITY.md](SECUR
 The items below are **planned, not committed**, and may change:
 
 - Additional branch protection/ruleset configuration after the Task 12 PR is reviewed.
-- A Visual Studio Code Marketplace publish, once the `docs/MARKETPLACE-PREFLIGHT.md` checklist is
-  complete, with a GitHub Release-based install path. Screenshots are an optional, separate
-  enhancement (see [Screenshots](#screenshots)) and are not a precondition for this.
+- Leaving preview once the provider integrations have had a full release cycle of real-world use.
+  Screenshots on the Marketplace listing remain an optional, separate enhancement (see
+  [Screenshots](#screenshots)).
 - Additional provider support may be considered in the future; nothing beyond Codex, Claude Code, GitHub Copilot, and Grok is currently planned or implemented.
 
 ## Non-affiliation
