@@ -261,6 +261,8 @@ export const LOCALIZATION_KEYS = [
   'selectProviderInSettings',
   'usageDataUnavailableYet',
   'percentageNotProvided',
+  'percentageUnknownAfterReset',
+  'resetWindowRenewedAwaitingCurrentData',
   'noUsageData',
   'criticalNearlyExhausted',
   'lowRemainingCapacity',

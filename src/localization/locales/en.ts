@@ -334,6 +334,8 @@ export const EN: TranslationCatalog = {
   selectProviderInSettings: 'Select this provider in settings to start it.',
   usageDataUnavailableYet: 'Usage data is not available yet.',
   percentageNotProvided: 'Percentage not provided',
+  percentageUnknownAfterReset: 'Percentage unknown until current data arrives',
+  resetWindowRenewedAwaitingCurrentData: 'Window renewed — awaiting current data',
   noUsageData: 'No usage data',
   criticalNearlyExhausted: 'Critical — limit nearly exhausted',
   lowRemainingCapacity: 'Low remaining capacity',

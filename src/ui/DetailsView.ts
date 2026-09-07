@@ -75,7 +75,29 @@ import {
 } from './ProviderPresentation';
 import type { InsightsMode } from '../configuration/EffectiveSettings';
 export const PROVIDER_INITIALIZATION_TIMEOUT_MS = 10_000;
-export const DASHBOARD_VERSION = '0.6.0';
+
+type DashboardExtensionContext = Pick<vscode.ExtensionContext, 'extension' | 'extensionMode'>;
+
+let dashboardExtensionContext: DashboardExtensionContext | undefined;
+
+const ExtensionMode =
+  (vscode as typeof vscode & { ExtensionMode?: { Development?: number } }).ExtensionMode ?? {
+    Development: 2,
+  };
+
+function dashboardExtensionVersion(context: DashboardExtensionContext | undefined): string {
+  return String(context?.extension?.packageJSON?.version ?? 'unknown');
+}
+
+function dashboardIsDevelopment(context: DashboardExtensionContext | undefined): boolean {
+  // The lightweight test VS Code shim does not expose ExtensionMode; real hosts always do.
+  return context?.extensionMode === ExtensionMode.Development;
+}
+
+function dashboardVersionLabel(context: DashboardExtensionContext | undefined): string {
+  const version = dashboardExtensionVersion(context);
+  return `${version}${dashboardIsDevelopment(context) ? ' (dev)' : ''}`;
+}
 
 export interface DashboardRenderSettings {
   providerVisibility?: 'auto' | 'active-only' | 'all-supported';
@@ -164,6 +186,7 @@ export function __resetDashboardStateForTests(): void {
   currentSession = undefined;
   dashboardRunner = undefined;
   dashboardLogoUri = undefined;
+  dashboardExtensionContext = undefined;
   dashboardLogger = undefined;
   lastKnownSnapshots = [];
   dashboardRenderSettings = {};
@@ -178,7 +201,10 @@ function assignDashboardHtml(
 ): void {
   if (session.disposed || currentSession?.generation !== session.generation) return;
   const actionStates = dashboardRunner?.getActionStates() ?? [];
-  const inputHash = hashHtml(JSON.stringify({ snapshots, actionStates, dashboardRenderSettings }));
+  const versionLabel = dashboardVersionLabel(dashboardExtensionContext);
+  const inputHash = hashHtml(
+    JSON.stringify({ snapshots, actionStates, dashboardRenderSettings, versionLabel }),
+  );
   if (!options.force && session.lastHtmlHash === inputHash) return;
   session.lastHtmlHash = inputHash;
   session.htmlAssignmentCount += 1;
@@ -188,6 +214,7 @@ function assignDashboardHtml(
     actionStates,
     dashboardLogoUri,
     session.panel.webview.cspSource,
+    dashboardExtensionContext,
   );
 }
 
@@ -268,6 +295,7 @@ export function showDashboard(
   context: vscode.ExtensionContext,
   runner: DashboardActionRunner = dashboardRunner as DashboardActionRunner,
 ): void {
+  dashboardExtensionContext = context;
   lastKnownSnapshots = snapshots;
   // Rich is only recorded when this function is explicitly used; safe-native mode never calls it.
   recordRichDashboardUsed();
@@ -329,7 +357,10 @@ export function showDashboard(
       if (dashboardLogger)
         logDashboardLifecycle(dashboardLogger, 'dashboard.panel.disposed', session.generation);
       if (currentSession === session) currentSession = undefined;
-      if (currentSession === undefined) dashboardLogoUri = undefined;
+      if (currentSession === undefined) {
+        dashboardLogoUri = undefined;
+        dashboardExtensionContext = undefined;
+      }
       if (dashboardRunner === runner) runner?.detachSink();
     },
     undefined,
@@ -451,7 +482,10 @@ function renderDashboardRaw(
   actionStates: readonly DashboardActionState[] = [],
   logoUri?: string,
   cspSource = "'none'",
+  context?: DashboardExtensionContext,
 ): string {
+  const version = dashboardExtensionVersion(context);
+  const versionLabel = dashboardVersionLabel(context);
   const stateMap = new Map(actionStates.map((state) => [state.actionId, state]));
   const presentations = resolveProviderPresentations(snapshots);
   const snapshotById = new Map<string, ProviderSnapshot>();
@@ -540,7 +574,7 @@ function renderDashboardRaw(
     dashboardRenderSettings.language === 'tr'
       ? `${catalog.availableIntegrations}: ${catalog.notProvided}`
       : 'All supported integrations are currently active.';
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${escapeHtml(logoUri ? cspSource : "'none'")}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'"><meta name="viewport" content="width=device-width,initial-scale=1"><style nonce="${nonce}">${dashboardStylesWithInsights()}${dashboardIconStyles()}</style></head><body><main class="dashboard-shell" data-dashboard-version="${DASHBOARD_VERSION}"><header class="dashboard-header"><div class="brand-row">${logo}<div class="brand-copy"><p class="eyebrow">PRIVATE DEVELOPER TOOL</p><h1>AI Limit Ledger</h1><p class="tagline">AI coding usage, limits and reset windows in one place.</p></div></div><div class="header-meta"><div><strong>${activeSummary}</strong><span>${latestCheck === undefined ? `${catalog.lastCheck}: ${catalog.notProvided}` : `${catalog.lastCheck}: ${escapeHtml(formatDate(latestCheck))}`}</span></div><span class="header-status"><span class="status-dot" aria-hidden="true"></span>Local snapshots</span></div>${preferences}<div class="global-actions">${actionButton('refresh-all', 'Refresh All', stateMap, 'primary')}${actionButton('open-provider-settings', 'Provider Settings', stateMap, 'secondary')}<details class="more-actions"><summary aria-label="More actions">${renderDashboardIcon('more', { className: 'more-actions__icon' })}<span>More actions</span></summary><div class="more-actions__menu">${actionButton('show-logs', 'Show Logs', stateMap, 'menu')}${actionButton('copy-redacted-diagnostics', 'Copy Diagnostics', stateMap, 'menu')}${actionButton('export-redacted-support-bundle', 'Export Support Bundle', stateMap, 'menu')}</div></details></div>${globalAlert}<div id="dashboard-action-status" class="action-feedback" role="status" aria-live="polite"></div></header>${renderGroup(catalog.activeProviders, 'active-providers-heading', activeCards, activeEmpty)}${renderGroup(catalog.availableIntegrations, 'available-integrations-heading', availableCards, availableEmpty)}<footer class="dashboard-footer"><span>Data is read locally from provider integrations and cached snapshots.</span><span>Privacy-first · v${DASHBOARD_VERSION}</span></footer></main><script nonce="${nonce}">${dashboardScript(catalog)}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${escapeHtml(logoUri ? cspSource : "'none'")}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'"><meta name="viewport" content="width=device-width,initial-scale=1"><style nonce="${nonce}">${dashboardStylesWithInsights()}${dashboardIconStyles()}</style></head><body><main class="dashboard-shell" data-dashboard-version="${escapeHtml(version)}"><header class="dashboard-header"><div class="brand-row">${logo}<div class="brand-copy"><p class="eyebrow">PRIVATE DEVELOPER TOOL</p><h1>AI Limit Ledger</h1><p class="tagline">AI coding usage, limits and reset windows in one place.</p></div></div><div class="header-meta"><div><strong>${activeSummary}</strong><span>${latestCheck === undefined ? `${catalog.lastCheck}: ${catalog.notProvided}` : `${catalog.lastCheck}: ${escapeHtml(formatDate(latestCheck))}`}</span></div><span class="header-status"><span class="status-dot" aria-hidden="true"></span>Local snapshots</span></div>${preferences}<div class="global-actions">${actionButton('refresh-all', 'Refresh All', stateMap, 'primary')}${actionButton('open-provider-settings', 'Provider Settings', stateMap, 'secondary')}<details class="more-actions"><summary aria-label="More actions">${renderDashboardIcon('more', { className: 'more-actions__icon' })}<span>More actions</span></summary><div class="more-actions__menu">${actionButton('show-logs', 'Show Logs', stateMap, 'menu')}${actionButton('copy-redacted-diagnostics', 'Copy Diagnostics', stateMap, 'menu')}${actionButton('export-redacted-support-bundle', 'Export Support Bundle', stateMap, 'menu')}</div></details></div>${globalAlert}<div id="dashboard-action-status" class="action-feedback" role="status" aria-live="polite"></div></header>${renderGroup(catalog.activeProviders, 'active-providers-heading', activeCards, activeEmpty)}${renderGroup(catalog.availableIntegrations, 'available-integrations-heading', availableCards, availableEmpty)}<footer class="dashboard-footer"><span>Data is read locally from provider integrations and cached snapshots.</span><span>Privacy-first · v${escapeHtml(versionLabel)}</span></footer></main><script nonce="${nonce}">${dashboardScript(catalog)}</script></body></html>`;
 }
 
 /** Applies translations to the static Rich Dashboard chrome after the existing safe HTML
@@ -552,9 +586,17 @@ export function renderDashboard(
   actionStates: readonly DashboardActionState[] = [],
   logoUri?: string,
   cspSource = "'none'",
+  context?: DashboardExtensionContext,
 ): string {
   const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
-  let html = renderDashboardRaw(snapshots, nonce, actionStates, logoUri, cspSource);
+  let html = renderDashboardRaw(
+    snapshots,
+    nonce,
+    actionStates,
+    logoUri,
+    cspSource,
+    context ?? dashboardExtensionContext,
+  );
   // The English raw renderer is the compatibility baseline. Only translate its chrome when the
   // runtime preference resolves to Turkish; dynamic provider data and action state remain intact.
   if (catalog === getUiTextCatalog('en')) return html;
@@ -1719,7 +1761,10 @@ function renderLocalizedDashboardUsageSummary(
     return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.freePlan}</span><span class="primary-usage__label">${catalog.connectedStatus}</span></div><p class="card-note">${catalog.numericUsageNotExposed}</p></div>`;
   }
   const windows = semantic.quotaWindows.filter(
-    (window) => window.usedPercentage !== undefined || window.remainingPercentage !== undefined,
+    (window) =>
+      window.usedPercentage !== undefined ||
+      window.remainingPercentage !== undefined ||
+      window.reset?.status === 'renewed-awaiting-current-data',
   );
   if (!windows.length)
     return `<div class="card-summary"><div class="primary-usage"><span class="primary-usage__value">${catalog.noUsageData}</span><span class="primary-usage__label">${localizedPresentationText(presentation, catalog)}</span></div><p class="card-note">${catalog.numericUsageUnavailable}</p>${snapshot.availability === 'waiting-for-first-response' ? `<p class="card-note">${catalog.claudeResponseDataRequirement}</p>` : ''}</div>`;
@@ -1873,7 +1918,11 @@ function renderPresentedDashboardProgressWindow(
     : '';
   const ariaValueText =
     window.ariaValueText ??
-    `${window.remainingPercentage ?? window.ariaValueNow ?? 0}% ${catalog.remaining.toLowerCase()}`;
+    (window.remainingPercentage !== undefined || window.ariaValueNow !== undefined
+      ? `${window.remainingPercentage ?? window.ariaValueNow}% ${catalog.remaining.toLowerCase()}`
+      : window.reset?.status === 'renewed-awaiting-current-data'
+        ? catalog.percentageUnknownAfterReset
+        : catalog.numericUsageUnavailable);
   const reset = window.reset
     ? formatPresentedReset(window.reset, dashboardRenderSettings.timeFormat ?? 'both', catalog)
     : catalog.notProvided;

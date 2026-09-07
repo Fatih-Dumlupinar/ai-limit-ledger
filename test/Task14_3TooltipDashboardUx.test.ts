@@ -9,6 +9,7 @@ import { formatProviderTooltip } from '../src/ui/ProviderStatusBarTooltip';
 import { providerSegmentText } from '../src/ui/StatusBarFormatter';
 import { buildSafeDashboardDocumentModel, renderSafeDashboard } from '../src/ui/SafeDashboard';
 import { createNonce, renderDashboard, setDashboardRenderSettings } from '../src/ui/DetailsView';
+import { getUiTextCatalog } from '../src/ui/UiTextCatalog';
 
 const NOW = Date.parse('2026-08-25T12:00:00.000Z');
 
@@ -203,6 +204,106 @@ describe('Task 14.3 shared provider presentation', () => {
     const result = buildProviderPresentationSummary(snapshot(), { now: NOW });
     const reset = result.quotaWindows[0]?.reset;
     expect(formatPresentedReset(reset, 'absolute')).not.toContain('in 5m');
+  });
+
+  it('recalculates a last-known-good reset countdown without changing its percentages', () => {
+    const lkg = snapshot('claude', {
+      availability: 'stale-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+    });
+    const first = buildProviderPresentationSummary(lkg, { now: NOW, language: 'en' });
+    const later = buildProviderPresentationSummary(lkg, {
+      now: NOW + 2 * 60_000,
+      language: 'en',
+    });
+
+    expect(first.quotaWindows[0]?.reset?.relativeText).toBe('in 5m');
+    expect(later.quotaWindows[0]?.reset?.relativeText).toBe('in 3m');
+    expect(later.quotaWindows[0]).toMatchObject({
+      usedPercentage: 13,
+      remainingPercentage: 87,
+    });
+  });
+
+  it('marks a last-known-good window with a past reset as unknown in English and Turkish', () => {
+    const lkg = snapshot('claude', {
+      availability: 'stale-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+      usageWindows: [usageWindow('five-hour', 13, Math.floor(NOW / 1000) - 60)],
+    });
+    const en = getUiTextCatalog('en');
+    const tr = getUiTextCatalog('tr');
+    const english = buildProviderPresentationSummary(lkg, { now: NOW, language: 'en' });
+    const turkish = buildProviderPresentationSummary(lkg, { now: NOW, language: 'tr' });
+    const englishWindow = english.quotaWindows[0]!;
+    const turkishWindow = turkish.quotaWindows[0]!;
+
+    expect(englishWindow.usedPercentage).toBeUndefined();
+    expect(englishWindow.remainingPercentage).toBeUndefined();
+    expect(presentedPercentageText(englishWindow, 'remaining', en)).toBe(
+      'Percentage unknown until current data arrives',
+    );
+    expect(formatPresentedReset(englishWindow.reset, 'relative', en)).toBe(
+      'Window renewed — awaiting current data',
+    );
+    expect(presentedPercentageText(turkishWindow, 'remaining', tr)).toBe(
+      'Güncel veri gelene kadar yüzde bilinmiyor',
+    );
+    expect(formatPresentedReset(turkishWindow.reset, 'relative', tr)).toBe(
+      'Pencere yenilendi — güncel veri bekleniyor',
+    );
+    expect(JSON.stringify(englishWindow)).not.toMatch(/(?:0|100)%/);
+
+    setDashboardRenderSettings({ language: 'en', percentageMode: 'both', timeFormat: 'both' });
+    const dashboard = renderDashboard([lkg], createNonce());
+    expect(dashboard).toContain('Percentage unknown until current data arrives');
+    expect(dashboard).toContain('Window renewed — awaiting current data');
+  });
+
+  it('carries the past-reset status into the Safe Dashboard without mutating the source percentage', () => {
+    const lkg = snapshot('claude', {
+      availability: 'rate-limited-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+      usageWindows: [usageWindow('five-hour', 13, Math.floor(NOW / 1000) - 60)],
+    });
+    const model = buildSafeDashboardDocumentModel([lkg], {
+      now: NOW,
+      language: 'en',
+      providerVisibility: 'active-only',
+    });
+    const safeWindow = model.activeProviders[0]?.usageWindows[0];
+
+    expect(safeWindow?.usedPercent).toBeUndefined();
+    expect(safeWindow?.remainingPercent).toBeUndefined();
+    expect(renderSafeDashboard(model)).toContain('Window renewed — awaiting current data');
+    expect(lkg.usageWindows[0]?.usedPercent).toBe(13);
+    expect(lkg.usageWindows[0]?.remainingPercent).toBe(87);
+  });
+
+  it('keeps a missing last-known-good reset as not provided', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        availability: 'stale-experimental',
+        stale: true,
+        source: 'Experimental — undocumented Anthropic usage endpoint',
+        metadata: { accountLimitsSource: 'last-known-good-oauth' },
+        usageWindows: [usageWindow('five-hour', 13, null)],
+      }),
+      { now: NOW, language: 'en' },
+    );
+    const window = result.quotaWindows[0]!;
+    const en = getUiTextCatalog('en');
+
+    expect(window.usedPercentage).toBe(13);
+    expect(window.remainingPercentage).toBe(87);
+    expect(window.reset).toBeUndefined();
+    expect(formatPresentedReset(window.reset, 'relative', en)).toBe('Not provided');
   });
 
   it('localizes the reset relative text in Turkish', () => {

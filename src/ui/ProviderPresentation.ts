@@ -19,10 +19,13 @@ import type { ProviderId, ProviderSnapshot, UsageWindow } from '../providers/typ
 
 export type PresentedTimeFormat = 'locale' | 'relative' | 'absolute' | 'both';
 
+export type PresentedResetStatus = 'renewed-awaiting-current-data';
+
 export interface PresentedReset {
   at: number;
   absoluteText: string;
   relativeText: string;
+  status?: PresentedResetStatus;
 }
 
 export interface PresentedQuotaWindow {
@@ -91,15 +94,40 @@ function validTimestamp(value: unknown): number | undefined {
   return number !== undefined && number > 0 ? number : undefined;
 }
 
-function resetFor(value: unknown, now: number, catalog: UiTextCatalog): PresentedReset | undefined {
+function resetFor(
+  value: unknown,
+  now: number,
+  catalog: UiTextCatalog,
+  lastKnownGood: boolean,
+): PresentedReset | undefined {
   if (value === null || value === undefined) return undefined;
   const at = normalizeToEpochMs(value, 'unix-seconds', now);
   if (at === null) return undefined;
+  if (lastKnownGood && at <= now) {
+    const status = catalog.resetWindowRenewedAwaitingCurrentData;
+    return {
+      at,
+      absoluteText: status,
+      relativeText: status,
+      status: 'renewed-awaiting-current-data',
+    };
+  }
   return {
     at,
     absoluteText: formatConfiguredTime(at, now, 'absolute', catalog, 'deadline'),
     relativeText: formatConfiguredTime(at, now, 'relative', catalog, 'deadline'),
   };
+}
+
+function isLastKnownGoodSnapshot(snapshot: ProviderSnapshot): boolean {
+  return (
+    snapshot.stale ||
+    snapshot.availability === 'stale' ||
+    snapshot.availability === 'stale-experimental' ||
+    snapshot.availability === 'rate-limited' ||
+    snapshot.availability === 'rate-limited-experimental' ||
+    snapshot.metadata?.accountLimitsSource === 'last-known-good-oauth'
+  );
 }
 
 function sourceWindowForCopilot(snapshot: ProviderSnapshot): UsageWindow | undefined {
@@ -149,14 +177,23 @@ function orderedWindows(snapshot: ProviderSnapshot): UsageWindow[] {
 
 function presentedWindow(
   providerId: string,
+  snapshot: ProviderSnapshot,
   window: UsageWindow,
   now: number,
   thresholds: Parameters<typeof createRemainingCapacityProgress>[1],
   catalog: UiTextCatalog,
 ): PresentedQuotaWindow {
-  const progress = createRemainingCapacityProgress(window.usedPercent, thresholds);
-  const usedPercentage = progress?.usedPercent ?? percentage(window.usedPercent);
-  const remainingPercentage = progress?.remainingPercent ?? percentage(window.remainingPercent);
+  const reset = resetFor(window.resetsAt, now, catalog, isLastKnownGoodSnapshot(snapshot));
+  const resetNeedsCurrentData = reset?.status === 'renewed-awaiting-current-data';
+  const progress = resetNeedsCurrentData
+    ? undefined
+    : createRemainingCapacityProgress(window.usedPercent, thresholds);
+  const usedPercentage = resetNeedsCurrentData
+    ? undefined
+    : (progress?.usedPercent ?? percentage(window.usedPercent));
+  const remainingPercentage = resetNeedsCurrentData
+    ? undefined
+    : (progress?.remainingPercent ?? percentage(window.remainingPercent));
   const rawId = String(window.id || '')
     .trim()
     .toLowerCase();
@@ -170,7 +207,6 @@ function presentedWindow(
     window.windowDurationMinutes,
     catalog,
   );
-  const reset = resetFor(window.resetsAt, now, catalog);
   return {
     id: id || label,
     label: providerId === 'claude' ? `${catalog.accountLimit} — ${label}` : label,
@@ -289,7 +325,7 @@ export function buildProviderPresentationSummary(
   const sourceKind =
     options.resolved?.sourceKind ?? sourceKindForSnapshot(snapshot.source, snapshot.metadata);
   const quotaWindows = orderedWindows(snapshot).map((window) =>
-    presentedWindow(providerId, window, now, options.thresholds ?? {}, catalog),
+    presentedWindow(providerId, snapshot, window, now, options.thresholds ?? {}, catalog),
   );
   const provider =
     providerId === 'codex' ||
@@ -318,6 +354,8 @@ export function formatPresentedReset(
   catalog: UiTextCatalog = getUiTextCatalog(),
 ): string {
   if (!reset) return catalog.notProvided;
+  if (reset.status === 'renewed-awaiting-current-data')
+    return catalog.resetWindowRenewedAwaitingCurrentData;
   if (format === 'relative') return reset.relativeText;
   if (format === 'absolute' || format === 'locale') return reset.absoluteText;
   return `${reset.absoluteText} · ${reset.relativeText}`;
@@ -328,6 +366,8 @@ export function presentedPercentageText(
   mode: 'remaining' | 'used' | 'both' = 'remaining',
   catalog: UiTextCatalog = getUiTextCatalog(),
 ): string | undefined {
+  if (window.reset?.status === 'renewed-awaiting-current-data')
+    return catalog.percentageUnknownAfterReset;
   const remaining =
     window.remainingPercentage === undefined
       ? undefined

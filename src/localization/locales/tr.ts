@@ -336,6 +336,8 @@ export const TR: TranslationCatalog = {
   selectProviderInSettings: 'Başlatmak için bu sağlayıcıyı ayarlardan seçin.',
   usageDataUnavailableYet: 'Kullanım verisi henüz kullanılamıyor.',
   percentageNotProvided: 'Yüzde sağlanmadı',
+  percentageUnknownAfterReset: 'Güncel veri gelene kadar yüzde bilinmiyor',
+  resetWindowRenewedAwaitingCurrentData: 'Pencere yenilendi — güncel veri bekleniyor',
   noUsageData: 'Kullanım verisi yok',
   criticalNearlyExhausted: 'Kritik — limit neredeyse tükendi',
   lowRemainingCapacity: 'Kalan kapasite düşük',

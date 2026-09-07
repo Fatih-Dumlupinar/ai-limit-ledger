@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   createNonce,
@@ -10,6 +12,24 @@ import { PROVIDER_INITIALIZATION_TIMEOUT_MS } from '../src/ui/DetailsView';
 import type { LimitSnapshot } from '../src/appServer/types';
 import type { ProviderSnapshot } from '../src/providers/types';
 import { buildCodexUsageInsights } from '../src/providers/UsageInsights';
+import { buildSafeDashboardDocumentModel, renderSafeDashboard } from '../src/ui/SafeDashboard';
+
+type DashboardContext = NonNullable<Parameters<typeof renderDashboard>[5]>;
+
+const packageJson = JSON.parse(
+  readFileSync(resolve(__dirname, '../package.json'), 'utf8'),
+) as { version: string };
+
+function dashboardContext(version: string, extensionMode: number): DashboardContext {
+  return {
+    extension: { packageJSON: { version } },
+    extensionMode,
+  } as DashboardContext;
+}
+
+const PRODUCTION_EXTENSION_MODE = 1;
+const DEVELOPMENT_EXTENSION_MODE = 2;
+
 const snapshot: LimitSnapshot = {
   limits: [],
   planType: null,
@@ -39,6 +59,59 @@ describe('DetailsView', () => {
     const html = renderWebview({ ...snapshot, planType: '<unsafe>' }, nonce);
     expect(html).toContain(`script-src 'nonce-${nonce}'`);
     expect(html).toContain('&lt;unsafe&gt;');
+  });
+  it('renders the Rich Dashboard version from package.json through the extension context', () => {
+    const html = renderDashboard(
+      [],
+      createNonce(),
+      [],
+      undefined,
+      "'none'",
+      dashboardContext(packageJson.version, PRODUCTION_EXTENSION_MODE),
+    );
+
+    expect(html).toContain(`data-dashboard-version="${packageJson.version}"`);
+    expect(html).toContain(`Privacy-first · v${packageJson.version}`);
+  });
+  it('marks the Rich Dashboard version as development in ExtensionMode.Development', () => {
+    const version = '9.9.9';
+    const html = renderDashboard(
+      [],
+      createNonce(),
+      [],
+      undefined,
+      "'none'",
+      dashboardContext(version, DEVELOPMENT_EXTENSION_MODE),
+    );
+
+    expect(html).toContain(`Privacy-first · v${version} (dev)`);
+  });
+  it('does not mark the Rich Dashboard version as development in production', () => {
+    const version = '9.9.9';
+    const html = renderDashboard(
+      [],
+      createNonce(),
+      [],
+      undefined,
+      "'none'",
+      dashboardContext(version, PRODUCTION_EXTENSION_MODE),
+    );
+
+    expect(html).toContain(`Privacy-first · v${version}`);
+    expect(html).not.toContain(`Privacy-first · v${version} (dev)`);
+  });
+  it('shows the same version in the Rich and Safe Dashboards', () => {
+    const context = dashboardContext(packageJson.version, PRODUCTION_EXTENSION_MODE);
+    const rich = renderDashboard([], createNonce(), [], undefined, "'none'", context);
+    const safe = renderSafeDashboard(
+      buildSafeDashboardDocumentModel([], {
+        version: packageJson.version,
+        language: 'en',
+      }),
+    );
+
+    expect(rich).toContain(`Privacy-first · v${packageJson.version}`);
+    expect(safe).toContain(`AI Limit Ledger Dashboard v${packageJson.version}`);
   });
   it('allowlists webview actions', () => {
     expect(isAllowedMessage(request('refresh-all'))).toBe(true);

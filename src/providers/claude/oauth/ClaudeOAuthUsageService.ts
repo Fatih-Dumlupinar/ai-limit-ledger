@@ -71,7 +71,7 @@ export interface ClaudeOAuthUsageServiceDeps {
   now?: () => number;
 }
 
-const DEFAULT_REFRESH_SECONDS = 120;
+const DEFAULT_REFRESH_SECONDS = 600;
 
 /**
  * Orchestrates the experimental OAuth usage transport end to end: consent/enabled gating,

@@ -24,7 +24,11 @@ import {
   type ProviderPresentationState,
 } from '../providers/ProviderCapabilityContract';
 import type { ProviderSnapshot } from '../providers/types';
-import { buildProviderPresentationSummary, type PresentedFreshness } from './ProviderPresentation';
+import {
+  buildProviderPresentationSummary,
+  type PresentedFreshness,
+  type PresentedResetStatus,
+} from './ProviderPresentation';
 import type { UsageInsightValue } from '../providers/UsageInsights';
 import type { InsightsMode } from '../configuration/EffectiveSettings';
 import type { LocalizationKey } from '../localization/LocalizationKeys';
@@ -57,6 +61,7 @@ export interface SafeUsageWindow {
   usedPercent?: number;
   remainingPercent?: number;
   resetsAt?: number;
+  resetStatus?: PresentedResetStatus;
   windowDurationMinutes?: number;
 }
 
@@ -615,6 +620,7 @@ function providerModel(
       ? { remainingPercent: window.remainingPercentage }
       : {}),
     ...(window.reset ? { resetsAt: window.reset.at } : {}),
+    ...(window.reset?.status ? { resetStatus: window.reset.status } : {}),
   }));
   const hasNumericUsage = usageWindows.some((window) => window.usedPercent !== undefined);
   const sourceKind = presentation.sourceKind;
@@ -997,17 +1003,29 @@ function renderProvider(
   if (model.usageWindows.length > 0) {
     for (const window of model.usageWindows) {
       lines.push(window.label);
-      const progress = progressBar(
-        window.usedPercent,
-        window.remainingPercent,
-        thresholds,
-        percentageMode,
-        language,
+      const resetNeedsCurrentData = window.resetStatus === 'renewed-awaiting-current-data';
+      const progress = resetNeedsCurrentData
+        ? undefined
+        : progressBar(
+            window.usedPercent,
+            window.remainingPercent,
+            thresholds,
+            percentageMode,
+            language,
+          );
+      lines.push(
+        progress ??
+          (resetNeedsCurrentData
+            ? catalog.percentageUnknownAfterReset
+            : catalog.numericUsageUnavailable),
       );
-      lines.push(progress ?? catalog.numericUsageUnavailable);
       if (window.resetsAt !== undefined)
         lines.push(
-          `${catalog.reset}: ${formatDate(window.resetsAt, now, timeFormat, language, 'deadline')}`,
+          `${catalog.reset}: ${
+            resetNeedsCurrentData
+              ? catalog.resetWindowRenewedAwaitingCurrentData
+              : formatDate(window.resetsAt, now, timeFormat, language, 'deadline')
+          }`,
         );
       lines.push('');
     }
