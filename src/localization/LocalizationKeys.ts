@@ -263,6 +263,7 @@ export const LOCALIZATION_KEYS = [
   'percentageNotProvided',
   'percentageUnknownAfterReset',
   'resetWindowRenewedAwaitingCurrentData',
+  'resetWindowNotStarted',
   'noUsageData',
   'criticalNearlyExhausted',
   'lowRemainingCapacity',

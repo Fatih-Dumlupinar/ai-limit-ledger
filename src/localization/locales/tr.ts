@@ -338,6 +338,7 @@ export const TR: TranslationCatalog = {
   percentageNotProvided: 'Yüzde sağlanmadı',
   percentageUnknownAfterReset: 'Güncel veri gelene kadar yüzde bilinmiyor',
   resetWindowRenewedAwaitingCurrentData: 'Pencere yenilendi — güncel veri bekleniyor',
+  resetWindowNotStarted: 'Pencere henüz başlamadı',
   noUsageData: 'Kullanım verisi yok',
   criticalNearlyExhausted: 'Kritik — limit neredeyse tükendi',
   lowRemainingCapacity: 'Kalan kapasite düşük',

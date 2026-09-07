@@ -1004,6 +1004,7 @@ function renderProvider(
     for (const window of model.usageWindows) {
       lines.push(window.label);
       const resetNeedsCurrentData = window.resetStatus === 'renewed-awaiting-current-data';
+      const windowNotStarted = window.resetStatus === 'window-not-started';
       const progress = resetNeedsCurrentData
         ? undefined
         : progressBar(
@@ -1024,7 +1025,9 @@ function renderProvider(
           `${catalog.reset}: ${
             resetNeedsCurrentData
               ? catalog.resetWindowRenewedAwaitingCurrentData
-              : formatDate(window.resetsAt, now, timeFormat, language, 'deadline')
+              : windowNotStarted
+                ? catalog.resetWindowNotStarted
+                : formatDate(window.resetsAt, now, timeFormat, language, 'deadline')
           }`,
         );
       lines.push('');

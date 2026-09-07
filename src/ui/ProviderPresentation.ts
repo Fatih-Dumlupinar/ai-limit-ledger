@@ -19,7 +19,11 @@ import type { ProviderId, ProviderSnapshot, UsageWindow } from '../providers/typ
 
 export type PresentedTimeFormat = 'locale' | 'relative' | 'absolute' | 'both';
 
-export type PresentedResetStatus = 'renewed-awaiting-current-data';
+export type PresentedResetStatus = 'renewed-awaiting-current-data' | 'window-not-started';
+
+/** Reset timestamps this fresh from "now" are presumed to be `now + windowDuration`, i.e. a
+ * sliding placeholder rather than a fixed deadline (see `resetFor`). */
+const WINDOW_NOT_STARTED_TOLERANCE_MS = 2 * 60_000;
 
 export interface PresentedReset {
   at: number;
@@ -100,8 +104,26 @@ function validTimestamp(value: unknown): number | undefined {
   return number !== undefined && number > 0 ? number : undefined;
 }
 
+function isUnstartedCodexWindow(
+  providerId: string,
+  usedPercent: unknown,
+  windowDurationMinutes: unknown,
+  at: number,
+  now: number,
+): boolean {
+  if (providerId !== 'codex') return false;
+  if (finite(usedPercent) !== 0) return false;
+  const durationMins = finite(windowDurationMinutes);
+  if (durationMins === undefined) return false;
+  const expectedAt = now + durationMins * 60_000;
+  return Math.abs(at - expectedAt) <= WINDOW_NOT_STARTED_TOLERANCE_MS;
+}
+
 function resetFor(
+  providerId: string,
   value: unknown,
+  usedPercent: unknown,
+  windowDurationMinutes: unknown,
   now: number,
   catalog: UiTextCatalog,
   lastKnownGood: boolean,
@@ -109,6 +131,15 @@ function resetFor(
   if (value === null || value === undefined) return undefined;
   const at = normalizeToEpochMs(value, 'unix-seconds', now);
   if (at === null) return undefined;
+  if (isUnstartedCodexWindow(providerId, usedPercent, windowDurationMinutes, at, now)) {
+    const status = catalog.resetWindowNotStarted;
+    return {
+      at,
+      absoluteText: status,
+      relativeText: status,
+      status: 'window-not-started',
+    };
+  }
   if (lastKnownGood && at <= now) {
     const status = catalog.resetWindowRenewedAwaitingCurrentData;
     return {
@@ -189,7 +220,15 @@ function presentedWindow(
   thresholds: Parameters<typeof createRemainingCapacityProgress>[1],
   catalog: UiTextCatalog,
 ): PresentedQuotaWindow {
-  const reset = resetFor(window.resetsAt, now, catalog, isLastKnownGoodSnapshot(snapshot));
+  const reset = resetFor(
+    providerId,
+    window.resetsAt,
+    window.usedPercent,
+    window.windowDurationMinutes,
+    now,
+    catalog,
+    isLastKnownGoodSnapshot(snapshot),
+  );
   const resetNeedsCurrentData = reset?.status === 'renewed-awaiting-current-data';
   const progress = resetNeedsCurrentData
     ? undefined
@@ -371,6 +410,7 @@ export function formatPresentedReset(
   if (!reset) return catalog.notProvided;
   if (reset.status === 'renewed-awaiting-current-data')
     return catalog.resetWindowRenewedAwaitingCurrentData;
+  if (reset.status === 'window-not-started') return catalog.resetWindowNotStarted;
   if (format === 'relative') return reset.relativeText;
   if (format === 'absolute' || format === 'locale') return reset.absoluteText;
   return `${reset.absoluteText} · ${reset.relativeText}`;

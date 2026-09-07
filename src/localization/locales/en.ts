@@ -336,6 +336,7 @@ export const EN: TranslationCatalog = {
   percentageNotProvided: 'Percentage not provided',
   percentageUnknownAfterReset: 'Percentage unknown until current data arrives',
   resetWindowRenewedAwaitingCurrentData: 'Window renewed — awaiting current data',
+  resetWindowNotStarted: 'Window has not started yet',
   noUsageData: 'No usage data',
   criticalNearlyExhausted: 'Critical — limit nearly exhausted',
   lowRemainingCapacity: 'Low remaining capacity',

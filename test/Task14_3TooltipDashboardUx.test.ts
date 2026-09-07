@@ -220,6 +220,89 @@ describe('Task 14.3 shared provider presentation', () => {
     expect(result.quotaWindows[0]?.reset).toBeUndefined();
   });
 
+  it('shows "window not started" for an unused Codex window whose reset is now+duration', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBe('window-not-started');
+    expect(formatPresentedReset(reset, 'both')).toBe('Window has not started yet');
+    // Percentage stays visible even though the reset is a placeholder.
+    expect(result.quotaWindows[0]?.usedPercentage).toBe(0);
+    expect(result.quotaWindows[0]?.remainingPercentage).toBe(100);
+  });
+
+  it('shows the "window not started" text in Turkish', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'tr' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(formatPresentedReset(reset, 'both', getUiTextCatalog('tr'))).toBe(
+      'Pencere henüz başlamadı',
+    );
+  });
+
+  it('shows an absolute date for a zero-used Codex window with a fixed, non-sliding reset', () => {
+    const fixedResetsAt = Math.floor(NOW / 1000) + 3 * 24 * 60 * 60; // three days out
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', {
+        usageWindows: [usageWindow('five-hour', 0, fixedResetsAt, 300)],
+      }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBeUndefined();
+    expect(formatPresentedReset(reset, 'both')).not.toBe('Window has not started yet');
+  });
+
+  it('always shows an absolute date once a Codex window has any usage', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 1, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBeUndefined();
+    expect(formatPresentedReset(reset, 'both')).not.toBe('Window has not started yet');
+  });
+
+  it('treats a reset within the 2-minute tolerance of now+duration as not started', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60 + 119; // 1m59s drift
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBe('window-not-started');
+  });
+
+  it('treats a reset beyond the 2-minute tolerance of now+duration as a real date', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60 + 121; // 2m01s drift
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBeUndefined();
+  });
+
+  it('does not treat a matching-duration reset as unstarted for other providers', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('grok', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBeUndefined();
+  });
+
   it('stores absolute and relative reset text as separate semantic fields', () => {
     const result = buildProviderPresentationSummary(snapshot(), { now: NOW });
     const reset = result.quotaWindows[0]?.reset;
