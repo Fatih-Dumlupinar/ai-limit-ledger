@@ -48,7 +48,7 @@ Claude Code CLI/extension  →  ~/.claude/.credentials.json  (read-only)
 | Token exfiltrated to a third party                             | The transport is hard-coded to `https://api.anthropic.com/api/oauth/usage`; no other host is contacted, and redirects are never followed.                          |
 | Malformed/oversized response crashes or misleads the extension | Response size is capped, content-type is checked, and only a small allowlist of numeric fields is parsed; anything else is treated as a failure, never guessed at. |
 | Silent breakage if Anthropic changes the endpoint              | Any non-2xx/parse failure surfaces as a clearly labeled `authentication-required`/`unavailable`/`stale` state, never a fabricated percentage.                      |
-| Hammering the endpoint / triggering account-wide rate limits   | A shared, cross-window minimum interval (120s+), single-flight, and an escalating 429 backoff (see below) apply regardless of how many VS Code windows are open.   |
+| Hammering the endpoint / triggering account-wide rate limits   | A shared, cross-window minimum interval (600s+), single-flight, and an escalating 429 backoff (see below) apply regardless of how many VS Code windows are open.   |
 
 ## 429 (rate-limit) behavior
 

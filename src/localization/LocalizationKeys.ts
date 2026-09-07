@@ -40,6 +40,7 @@ export const LOCALIZATION_KEYS = [
   'rateLimited',
   'signInRequired',
   'authenticationRequired',
+  'claudeOAuthSessionRefreshRequired',
   'cliNotInstalled',
   'setupRequired',
   'disabled',

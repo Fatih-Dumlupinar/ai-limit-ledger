@@ -42,6 +42,8 @@ export const TR: TranslationCatalog = {
   rateLimited: 'Hız sınırına ulaşıldı',
   signInRequired: 'Oturum açma gerekli',
   authenticationRequired: 'Kimlik doğrulama gerekli',
+  claudeOAuthSessionRefreshRequired:
+    'Claude Code oturumu yenilenmeli — bir terminalde claude komutunu çalıştırın',
   cliNotInstalled: 'CLI kurulu değil',
   setupRequired: 'Kurulum gerekli',
   disabled: 'Devre dışı',

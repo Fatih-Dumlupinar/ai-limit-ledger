@@ -42,6 +42,8 @@ export const EN: TranslationCatalog = {
   rateLimited: 'Rate limited',
   signInRequired: 'Sign-in required',
   authenticationRequired: 'Authentication required',
+  claudeOAuthSessionRefreshRequired:
+    'Claude Code session must be refreshed — run the claude command in a terminal',
   cliNotInstalled: 'CLI not installed',
   setupRequired: 'Setup required',
   disabled: 'Disabled',

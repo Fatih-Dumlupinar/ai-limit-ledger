@@ -338,6 +338,8 @@ export function resolveProviderPresentation(
     normalizedState,
     dataAvailability,
     snapshot.availability,
+    providerId,
+    snapshot.metadata?.oauthAvailability,
   );
   return {
     providerId,
@@ -369,6 +371,8 @@ function localizedPresentationFor(
   normalizedState: NormalizedProviderState,
   dataAvailability: ProviderDataAvailability,
   availability: ProviderAvailability,
+  providerId: string,
+  oauthAvailability: unknown,
 ): LocalizedPresentation {
   const statusKey: LocalizationKey =
     normalizedState === 'experimental'
@@ -376,7 +380,9 @@ function localizedPresentationFor(
       : normalizedState === 'setup-required'
         ? 'setupRequired'
         : normalizedState === 'authentication-required'
-          ? 'authenticationRequired'
+          ? providerId === 'claude' && oauthAvailability === 'authentication-required'
+            ? 'claudeOAuthSessionRefreshRequired'
+            : 'authenticationRequired'
           : normalizedState === 'cli-not-installed'
             ? 'cliNotInstalled'
             : normalizedState === 'integration-disabled'

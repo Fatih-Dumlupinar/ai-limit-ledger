@@ -191,7 +191,7 @@ Eski `compactStatusBar`, `presentationMode`, kullanılan-yüzde eşikleri, `show
 
 Komut Paleti ve Ayarlar katkı başlıkları/açıklamaları, VS Code'un `package.nls.json` / `package.nls.tr.json` mekanizması üzerinden sağlanır. Dilleri VS Code görüntüleme dilini izler ve eklenti katkısı yüklendiğinde seçilir; `display.language`'ı değiştirmek bu platforma ait dizeleri canlı olarak değiştiremez ve Reload Window gerektirebilir.
 
-CLI'siz deneysel Claude kullanım kontrolü, `api.anthropic.com/api/oauth/usage` adresine yapılan bir hesap kullanımı `GET` isteğidir; model üretimi veya mesaj isteği yoktur ve istek gövdesi yoktur. Paylaşılan minimum 120 saniyelik aralık ve 429 backoff politikasına tabi kalmaya devam eder.
+CLI'siz deneysel Claude kullanım kontrolü, `api.anthropic.com/api/oauth/usage` adresine yapılan bir hesap kullanımı `GET` isteğidir; model üretimi veya mesaj isteği yoktur ve istek gövdesi yoktur. Paylaşılan minimum 600 saniyelik aralık ve 429 backoff politikasına tabi kalmaya devam eder.
 
 ### Sağlayıcı kullanım içgörüleri
 

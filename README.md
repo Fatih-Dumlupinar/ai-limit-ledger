@@ -190,7 +190,7 @@ The older `compactStatusBar`, `presentationMode`, used-percentage thresholds, `s
 
 Command Palette and Settings contribution titles/descriptions are provided through VS Code's `package.nls.json` / `package.nls.tr.json` mechanism. Their language follows the VS Code display language and is selected when the extension contribution is loaded; changing `display.language` cannot change those platform-owned strings live and may require Reload Window.
 
-The experimental CLI-free Claude usage check is an account usage `GET` request to `api.anthropic.com/api/oauth/usage`, with no model-generation or messages request and no request body. It remains subject to its shared minimum 120-second interval and 429 backoff policy.
+The experimental CLI-free Claude usage check is an account usage `GET` request to `api.anthropic.com/api/oauth/usage`, with no model-generation or messages request and no request body. It remains subject to its shared minimum 600-second interval and 429 backoff policy.
 
 ### Provider usage insights
 

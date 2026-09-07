@@ -167,8 +167,8 @@ export const SETTINGS_SCHEMA = [
   definition({
     key: SETTING_KEYS.claudeOAuthRefreshSeconds,
     type: 'number',
-    default: 120,
-    minimum: 120,
+    default: 600,
+    minimum: 600,
     maximum: 3600,
     scope: 'machine',
     category: 'refresh',

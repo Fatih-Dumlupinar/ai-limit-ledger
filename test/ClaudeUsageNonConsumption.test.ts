@@ -120,7 +120,7 @@ describe('Claude usage non-consumption boundaries', () => {
     expect(nonJson).toEqual({ kind: 'failure', category: 'unexpected-content-type' });
   });
 
-  it('enforces the 120-second minimum and at most one request per refresh cycle', async () => {
+  it('enforces the 600-second minimum and at most one request per refresh cycle', async () => {
     let clock = now;
     let fetches = 0;
     const globalState = state({ 'aiLimitLedger.claude.experimentalOAuthUsage.consent': true });
@@ -140,7 +140,7 @@ describe('Claude usage non-consumption boundaries', () => {
     await service.requestRefresh('manual');
     await service.requestRefresh('manual');
     expect(fetches).toBe(1);
-    clock += 119_000;
+    clock += 599_000;
     await service.requestRefresh('timer');
     expect(fetches).toBe(1);
     clock += 2_000;
@@ -185,7 +185,7 @@ describe('Claude usage non-consumption boundaries', () => {
       'utf8',
     );
     expect(source).toContain('recordRateLimited');
-    expect(source).toContain('DEFAULT_REFRESH_SECONDS = 120');
+    expect(source).toContain('DEFAULT_REFRESH_SECONDS = 600');
     expect(source).toContain("result.kind === 'rate-limited'");
   });
 });

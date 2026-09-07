@@ -94,7 +94,7 @@
   "config.cacheMaxAge": "Son bilinen iyi kullanımın gösterim için geçerli kalacağı süre.",
   "config.cacheExpired": "Panoda süresi geçmiş önbellekli kullanıma izin ver.",
   "config.claudeOAuthEnabled": "Deneysel CLI'sız Claude kullanımı mevcut kimlik bilgisini yalnızca okur; belirteci günlüğe veya depoya yazmaz.",
-  "config.claudeOAuthRefreshSeconds": "Deneysel CLI'sız Claude kullanım istekleri arasındaki minimum saniye.",
+  "config.claudeOAuthRefreshSeconds": "Kalıcı uç nokta hız sınırlamasını önlemek için deneysel CLI'sız Claude kullanım istekleri arasında minimum 600 saniye (5 dakika).",
   "config.copilotPlan": "Copilot aylık kota kaynağı.",
   "config.copilotCredits": "Özel plan kullanılırken aylık Copilot kredileri.",
   "config.copilotRefresh": "Minimum Copilot kullanım kontrol aralığı.",

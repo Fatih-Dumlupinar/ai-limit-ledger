@@ -481,8 +481,8 @@
         },
         "aiLimitLedger.claude.experimentalOAuthUsage.refreshSeconds": {
           "type": "number",
-          "default": 120,
-          "minimum": 120,
+          "default": 600,
+          "minimum": 600,
           "maximum": 3600,
           "scope": "machine",
           "description": "%config.claudeOAuthRefreshSeconds%"

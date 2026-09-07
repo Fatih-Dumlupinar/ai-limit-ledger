@@ -897,4 +897,34 @@ describe('DetailsView', () => {
     expect(html).toContain('data-action-id="open-claude-code"');
     expect(html).not.toContain('data-action-id="disable-claude-oauth"');
   });
+
+  it('uses the Claude OAuth session-refresh message in English and Turkish', () => {
+    const provider: ProviderSnapshot = {
+      providerId: 'claude',
+      providerName: 'Claude Code',
+      availability: 'authentication-required',
+      connected: false,
+      plan: null,
+      cliVersion: null,
+      usageWindows: [],
+      source: 'Experimental â€” undocumented Anthropic usage endpoint',
+      observedAt: 0,
+      stale: false,
+      capabilities: { rateLimits: true, usage: true, statusLine: true },
+      metadata: { oauthAvailability: 'authentication-required' },
+    };
+
+    try {
+      setDashboardRenderSettings({ language: 'en' });
+      expect(renderDashboard([provider], createNonce())).toContain(
+        'Claude Code session must be refreshed — run the claude command in a terminal',
+      );
+      setDashboardRenderSettings({ language: 'tr' });
+      expect(renderDashboard([provider], createNonce())).toContain(
+        'Claude Code oturumu yenilenmeli — bir terminalde claude komutunu çalıştırın',
+      );
+    } finally {
+      setDashboardRenderSettings({});
+    }
+  });
 });

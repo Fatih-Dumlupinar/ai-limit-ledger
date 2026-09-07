@@ -1361,6 +1361,7 @@ function renderClaudeExperimentalCard(
   states: ReadonlyMap<DashboardActionId, DashboardActionState>,
 ): string {
   const meta = snapshot.metadata ?? {};
+  const catalog = getUiTextCatalog(dashboardRenderSettings.language ?? 'auto');
   const accountLimitsSource =
     OAUTH_SOURCE_LABELS[String(meta.accountLimitsSource ?? 'none')] ?? 'Not available';
   const sidebarActivity = meta.sidebarActivityDetected === true ? 'Detected' : 'Not detected';
@@ -1368,7 +1369,10 @@ function renderClaudeExperimentalCard(
     'ready-experimental': 'Experimental usage — connected',
     'stale-experimental': 'Experimental usage — showing last known usage',
     'rate-limited-experimental': 'rate-limited — showing last known usage',
-    'authentication-required': 'Sign-in required',
+    'authentication-required':
+      meta.oauthAvailability === 'authentication-required'
+        ? catalog.claudeOAuthSessionRefreshRequired
+        : catalog.authenticationRequired,
     'consent-required': 'Consent required',
   };
   const windows =

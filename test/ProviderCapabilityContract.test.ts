@@ -9,6 +9,7 @@ import {
 } from '../src/providers/ProviderCapabilityContract';
 import type { ProviderSnapshot } from '../src/providers/types';
 import { combinedStatusText } from '../src/ui/StatusBarFormatter';
+import { getUiTextCatalog } from '../src/ui/UiTextCatalog';
 
 const capabilities = { rateLimits: true, usage: true, statusLine: false };
 
@@ -265,6 +266,38 @@ describe('provider presentation resolver', () => {
 
   it.each(cases)('$name', ({ input, expected }) => {
     expect(resolveProviderPresentation({ snapshot: input, now: 2_000 })).toMatchObject(expected);
+  });
+
+  it('uses Claude OAuth session-refresh guidance without changing Copilot or Grok auth text', () => {
+    const claude = resolveProviderPresentation({
+      snapshot: snapshot('claude', 'authentication-required', {
+        metadata: { oauthAvailability: 'authentication-required' },
+      }),
+    });
+    const copilot = resolveProviderPresentation({
+      snapshot: snapshot('copilot', 'authentication-required'),
+    });
+    const grok = resolveProviderPresentation({
+      snapshot: snapshot('grok', 'authentication-required'),
+    });
+    const claudeWithoutOAuth = resolveProviderPresentation({
+      snapshot: snapshot('claude', 'authentication-required'),
+    });
+    const en = getUiTextCatalog('en');
+    const tr = getUiTextCatalog('tr');
+
+    expect(claude.statusKey).toBe('claudeOAuthSessionRefreshRequired');
+    expect(en[claude.statusKey]).toBe(
+      'Claude Code session must be refreshed — run the claude command in a terminal',
+    );
+    expect(tr[claude.statusKey]).toBe(
+      'Claude Code oturumu yenilenmeli — bir terminalde claude komutunu çalıştırın',
+    );
+    expect(copilot.statusKey).toBe('authenticationRequired');
+    expect(grok.statusKey).toBe('authenticationRequired');
+    expect(claudeWithoutOAuth.statusKey).toBe('authenticationRequired');
+    expect(en[copilot.statusKey]).toBe('Authentication required');
+    expect(tr[grok.statusKey]).toBe('Kimlik doğrulama gerekli');
   });
 
   it('removes a deselected provider even if its old snapshot says ready', () => {
