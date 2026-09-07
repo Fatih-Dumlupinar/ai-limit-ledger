@@ -328,6 +328,80 @@ describe('Task 14.3 shared provider presentation', () => {
     expect(result.freshness.summaryText).toBe('2m ago');
   });
 
+  it('uses the Claude status-line source timestamp for successful update and snapshot age', () => {
+    const sourceUpdatedAt = NOW - 60 * 60_000;
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW,
+        checkedAt: NOW,
+        lastSuccessfulDataUpdate: NOW,
+        lastSuccessfulUpdateAt: NOW,
+        sourceUpdatedAt,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('1h ago');
+    expect(result.freshness.observedAt).toBe(sourceUpdatedAt);
+    expect(result.freshness.lastSuccessfulUpdateAt).toBe(sourceUpdatedAt);
+    expect(result.freshness.detailLines).toContainEqual({
+      label: 'Last successful update',
+      value: '1h ago',
+      at: sourceUpdatedAt,
+    });
+    expect(result.freshness.detailLines).toContainEqual({
+      label: 'Last check',
+      value: 'just now',
+      at: NOW,
+    });
+  });
+
+  it('keeps a fresh Claude status-line snapshot fresh', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW - 60 * 60_000,
+        checkedAt: NOW,
+        lastSuccessfulDataUpdate: NOW - 60 * 60_000,
+        sourceUpdatedAt: NOW,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('just now');
+  });
+
+  it('falls back to the existing Claude freshness fields without sourceUpdatedAt', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW - 2 * 60_000,
+        checkedAt: NOW,
+        sourceUpdatedAt: null,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('2m ago');
+  });
+
+  it('does not use sourceUpdatedAt for Codex, Copilot, or Grok freshness', () => {
+    for (const providerId of ['codex', 'copilot', 'grok']) {
+      const result = buildProviderPresentationSummary(
+        snapshot(providerId, {
+          observedAt: NOW,
+          checkedAt: NOW,
+          lastSuccessfulDataUpdate: NOW,
+          sourceUpdatedAt: NOW - 60 * 60_000,
+        }),
+        { now: NOW, language: 'en' },
+      );
+
+      expect(result.freshness.summaryText).toBe('just now');
+    }
+  });
+
   it('marks stale data separately from fresh data', () => {
     const result = buildProviderPresentationSummary(snapshot('codex', { stale: true }), {
       now: NOW,

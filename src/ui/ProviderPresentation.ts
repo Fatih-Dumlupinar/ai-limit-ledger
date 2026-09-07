@@ -57,6 +57,12 @@ export interface PresentedFreshnessLine {
   at?: number;
 }
 
+function claudeStatusLineTimestamp(snapshot: ProviderSnapshot): number | undefined {
+  if (normalizeProviderId(snapshot.providerId) !== 'claude') return undefined;
+  if (snapshot.source !== 'Official Claude Code status-line') return undefined;
+  return validTimestamp(snapshot.sourceUpdatedAt);
+}
+
 export interface PresentedHealth {
   state: string;
   attention: 'none' | 'warning' | 'error';
@@ -255,14 +261,17 @@ function freshnessFor(
   catalog: UiTextCatalog,
 ): PresentedFreshness {
   const checkedAt = validTimestamp(snapshot.checkedAt);
-  const observedAt = validTimestamp(snapshot.observedAt);
+  const readObservedAt = validTimestamp(snapshot.observedAt);
+  const sourceObservedAt = claudeStatusLineTimestamp(snapshot);
+  const observedAt = sourceObservedAt ?? readObservedAt;
   const hasNumericData = windows.some(
     (window) => window.usedPercentage !== undefined || window.remainingPercentage !== undefined,
   );
   const lastSuccessfulUpdateAt =
+    sourceObservedAt ??
     validTimestamp(snapshot.lastSuccessfulUpdateAt) ??
     validTimestamp(snapshot.lastSuccessfulDataUpdate) ??
-    (hasNumericData ? observedAt : undefined);
+    (hasNumericData ? readObservedAt : undefined);
   const primaryAt = lastSuccessfulUpdateAt ?? observedAt ?? checkedAt;
   const state = isProblemState(snapshot);
   const summaryText = primaryAt
