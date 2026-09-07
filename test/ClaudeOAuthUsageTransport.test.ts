@@ -20,14 +20,28 @@ function fakeResponse(
   };
 }
 
+const FIVE_HOUR_RESET = '2027-01-15T12:00:00.000000+00:00';
+const SEVEN_DAY_RESET = '2027-01-22T12:00:00.000000+00:00';
+
+function oauthWindow(utilization: number, resetsAt: string | number = FIVE_HOUR_RESET) {
+  return {
+    utilization,
+    resets_at: resetsAt,
+    limit_dollars: null,
+    used_dollars: null,
+    remaining_dollars: null,
+    locked_reason: null,
+  };
+}
+
 describe('fetchClaudeOAuthUsage', () => {
   it('parses the allowlisted five-hour/seven-day fields from a well-formed response', async () => {
     const fetchImpl: FetchLike = async () =>
       fakeResponse(
         200,
         JSON.stringify({
-          five_hour: { used_percentage: 42, resets_at: 1_800_000_000 },
-          seven_day: { used_percentage: 12, resets_at: 1_800_500_000 },
+          five_hour: oauthWindow(42),
+          seven_day: oauthWindow(12, SEVEN_DAY_RESET),
           account_id: 'must-not-leak',
         }),
         { 'content-type': 'application/json' },
@@ -44,7 +58,7 @@ describe('fetchClaudeOAuthUsage', () => {
     let requestedUrl = '';
     const fetchImpl: FetchLike = async (url) => {
       requestedUrl = url;
-      return fakeResponse(200, JSON.stringify({ five_hour: { used_percentage: 1 } }), {
+      return fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(1) }), {
         'content-type': 'application/json',
       });
     };
@@ -62,6 +76,14 @@ describe('fetchClaudeOAuthUsage', () => {
     const fetchImpl: FetchLike = async () => fakeResponse(401, '');
     const result = await fetchClaudeOAuthUsage('t', fetchImpl);
     expect(result).toEqual({ kind: 'authentication-required' });
+  });
+
+  it('keeps a network transport failure distinct from authentication-required', async () => {
+    const result = await fetchClaudeOAuthUsage('t', async () => {
+      throw new Error('DNS lookup failed');
+    });
+
+    expect(result).toEqual({ kind: 'failure', category: 'transport-error' });
   });
 
   it('reports rate-limited with the parsed Retry-After header on 429', async () => {
@@ -115,5 +137,88 @@ describe('fetchClaudeOAuthUsage', () => {
       });
     const result = await fetchClaudeOAuthUsage('t', fetchImpl);
     expect(result).toEqual({ kind: 'failure', category: 'usage-read-failed' });
+  });
+
+  it('converts an ISO resets_at string to epoch seconds', async () => {
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(42, FIVE_HOUR_RESET) }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.resetsAt).toBe(Math.floor(Date.parse(FIVE_HOUR_RESET) / 1000));
+  });
+
+  it('converts an offset ISO resets_at string to epoch seconds', async () => {
+    const resetsAt = '2027-01-15T15:00:00.000000+03:00';
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(42, resetsAt) }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.resetsAt).toBe(Math.floor(Date.parse(resetsAt) / 1000));
+  });
+
+  it('keeps supporting epoch-second resets_at numbers', async () => {
+    const resetsAt = 1_800_000_000;
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(42, resetsAt) }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.resetsAt).toBe(resetsAt);
+  });
+
+  it('keeps the window when resets_at is invalid and returns null for the reset', async () => {
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(42, 'not-a-timestamp') }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.usedPercent).toBe(42);
+    expect(result.fiveHour?.resetsAt).toBeNull();
+  });
+
+  it('keeps the window when resets_at is missing and returns null for the reset', async () => {
+    const window = { ...oauthWindow(42), resets_at: undefined };
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: window }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.usedPercent).toBe(42);
+    expect(result.fiveHour?.resetsAt).toBeNull();
+  });
+
+  it('reads the percentage from utilization when used_percentage is absent', async () => {
+    const fetchImpl: FetchLike = async () =>
+      fakeResponse(200, JSON.stringify({ five_hour: oauthWindow(37) }), {
+        'content-type': 'application/json',
+      });
+
+    const result = await fetchClaudeOAuthUsage('t', fetchImpl);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.fiveHour?.usedPercent).toBe(37);
   });
 });

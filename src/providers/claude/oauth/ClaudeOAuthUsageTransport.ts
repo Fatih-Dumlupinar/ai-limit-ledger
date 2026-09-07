@@ -69,10 +69,19 @@ function parseWindow(raw: unknown): UsageWindowResult | undefined {
   if (!value) return undefined;
   const used = num(value.used_percentage) ?? num(value.utilization);
   if (used === null) return undefined;
+  const resetValue = value.resets_at ?? value.reset_at;
+  const resetKind =
+    typeof resetValue === 'string'
+      ? 'iso'
+      : typeof resetValue === 'number'
+        ? 'unix-seconds'
+        : undefined;
   return {
     usedPercent: clamp(used),
     remainingPercent: clamp(100 - used),
-    resetsAt: normalizeToEpochSeconds(value.resets_at ?? value.reset_at, 'unix-seconds'),
+    // OAuth returns ISO-8601 timestamps, while the Claude status-line returns epoch seconds;
+    // these sources intentionally use different timestamp kinds.
+    resetsAt: resetKind ? normalizeToEpochSeconds(resetValue, resetKind) : null,
   };
 }
 
