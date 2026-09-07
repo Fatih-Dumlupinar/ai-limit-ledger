@@ -438,6 +438,7 @@ export const LOCALIZATION_KEYS = [
   'claudeOAuthHookRemoveWarning',
   'claudeOAuthEnabled',
   'claudeOAuthDisabled',
+  'rateLimitWindowWithSource',
 ] as const;
 
 export type LocalizationKey = (typeof LOCALIZATION_KEYS)[number];

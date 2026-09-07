@@ -207,12 +207,18 @@ function presentedWindow(
     providerId === 'copilot' && rawId === 'copilot-monthly-ai-credits'
       ? 'monthly-ai-credits'
       : String(window.id || '');
-  const label = localizedRateLimitWindowLabel(
+  const baseLabel = localizedRateLimitWindowLabel(
     id,
     window.label,
     window.windowDurationMinutes,
     catalog,
   );
+  const sourceBucket = providerId === 'codex' ? window.limitId?.trim() : undefined;
+  const label = sourceBucket
+    ? catalog.rateLimitWindowWithSource
+        .replace('{window}', baseLabel)
+        .replace('{source}', sourceBucket)
+    : baseLabel;
   return {
     id: id || label,
     label: providerId === 'claude' ? `${catalog.accountLimit} — ${label}` : label,

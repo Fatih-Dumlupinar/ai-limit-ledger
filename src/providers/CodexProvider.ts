@@ -163,6 +163,7 @@ export class CodexProvider implements ProviderAdapter {
       usageWindows: parsed.limits.map((limit, i) => ({
         id: `codex-${i}`,
         label: limit.label,
+        limitId: limit.limitId ?? null,
         usedPercent: limit.usedPercent,
         remainingPercent: limit.remainingPercent,
         resetsAt: limit.resetsAt,
@@ -270,6 +271,7 @@ export class CodexProvider implements ProviderAdapter {
             parsed?.limits.map((limit, i) => ({
               id: `codex-${i}`,
               label: limit.label,
+              limitId: limit.limitId ?? null,
               usedPercent: limit.usedPercent,
               remainingPercent: limit.remainingPercent,
               resetsAt: limit.resetsAt,

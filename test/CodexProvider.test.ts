@@ -101,6 +101,11 @@ describe('CodexProvider notification-driven refresh', () => {
     await provider.start();
     const snapshot = await provider.refresh(true);
     expect(snapshot?.usageWindows).toHaveLength(3);
+    expect(snapshot?.usageWindows.map((window) => window.limitId)).toEqual([
+      'codex',
+      'codex',
+      'other',
+    ]);
   });
 
   it('exposes fallback interval, notification time, and single-flight state in diagnostics', async () => {

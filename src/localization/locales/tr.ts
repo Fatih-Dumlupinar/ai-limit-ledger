@@ -473,5 +473,6 @@ export const TR: TranslationCatalog = {
   currentStreak: 'Mevcut seri',
   longestStreak: 'En uzun seri',
   appServer: 'App Server',
+  rateLimitWindowWithSource: '{window} ({source})',
   disconnected: 'Bağlı değil',
 };

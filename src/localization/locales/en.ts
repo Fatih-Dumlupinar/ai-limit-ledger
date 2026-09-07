@@ -467,5 +467,6 @@ export const EN: TranslationCatalog = {
   currentStreak: 'Current streak',
   longestStreak: 'Longest streak',
   appServer: 'App Server',
+  rateLimitWindowWithSource: '{window} ({source})',
   disconnected: 'Disconnected',
 };

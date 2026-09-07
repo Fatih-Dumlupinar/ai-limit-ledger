@@ -64,6 +64,46 @@ describe('Task 14.3 shared provider presentation', () => {
     expect(result.quotaWindows.map((window) => window.id)).toEqual(['five-hour', 'seven-day']);
   });
 
+  it('labels Codex windows with their source bucket in English and Turkish', () => {
+    const usageWindows = [
+      { ...usageWindow('codex-0', 10), limitId: 'codex' },
+      { ...usageWindow('codex-1', 20, null, 10080), limitId: 'codex' },
+      { ...usageWindow('codex-2', 30, null, 10080), limitId: 'work' },
+    ];
+
+    const english = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows }),
+      { now: NOW, language: 'en' },
+    );
+    expect(english.quotaWindows.map((window) => window.label)).toEqual([
+      '5-hour window (codex)',
+      '7-day window (codex)',
+      '7-day window (work)',
+    ]);
+    expect(english.quotaWindows).toHaveLength(3);
+
+    const turkish = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows }),
+      { now: NOW, language: 'tr' },
+    );
+    expect(turkish.quotaWindows.map((window) => window.label)).toEqual([
+      '5 saatlik pencere (codex)',
+      '7 günlük pencere (codex)',
+      '7 günlük pencere (work)',
+    ]);
+  });
+
+  it('keeps the existing Codex label for a single bucket or null limitId', () => {
+    const single = buildProviderPresentationSummary(
+      snapshot('codex', {
+        usageWindows: [{ ...usageWindow('five-hour', 10), limitId: null }],
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(single.quotaWindows.map((window) => window.label)).toEqual(['5-hour window']);
+  });
+
   it('deduplicates repeated quota windows by semantic id', () => {
     const result = buildProviderPresentationSummary(
       snapshot('claude', {
