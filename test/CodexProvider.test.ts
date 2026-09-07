@@ -85,27 +85,77 @@ describe('CodexProvider notification-driven refresh', () => {
     expect(readRateLimits.mock.calls.length).toBeGreaterThan(callsAfterInitialRefresh);
   });
 
-  it('shows primary, secondary, and extra rateLimitsByLimitId windows together', async () => {
+  it('orders windows by duration, keeps keyed ids stable, and puts the summary window first', async () => {
+    let result = {
+      rateLimitsByLimitId: {
+        work: {
+          primary: { usedPercent: 70, windowDurationMins: 10080 },
+        },
+        codex: {
+          primary: { usedPercent: 10, windowDurationMins: 300 },
+        },
+      },
+    };
+    const client = fakeClient({
+      readRateLimits: vi.fn(async () => result),
+    });
+    const provider = new CodexProvider(client, { error: vi.fn() });
+    await provider.start();
+    const first = await provider.refresh(true);
+
+    expect(first?.usageWindows.map((window) => window.windowDurationMinutes)).toEqual([
+      300,
+      10080,
+    ]);
+    expect(first?.usageWindows.map((window) => window.id)).toEqual([
+      'codex-codex-300',
+      'codex-work-10080',
+    ]);
+    // The dashboard summary reads the first window's percentage.
+    expect(first?.usageWindows[0]?.usedPercent).toBe(10);
+
+    result = {
+      rateLimitsByLimitId: {
+        codex: {
+          primary: { usedPercent: 10, windowDurationMins: 300 },
+        },
+        work: {
+          primary: { usedPercent: 70, windowDurationMins: 10080 },
+        },
+      },
+    };
+    const second = await provider.refresh(true);
+
+    expect(second?.usageWindows.map((window) => window.id)).toEqual(
+      first?.usageWindows.map((window) => window.id),
+    );
+  });
+
+  it('sorts equal-duration windows alphabetically by limit id', async () => {
     const client = fakeClient({
       readRateLimits: vi.fn(async () => ({
         rateLimitsByLimitId: {
-          codex: {
-            primary: { usedPercent: 10, windowDurationMins: 300 },
-            secondary: { usedPercent: 20, windowDurationMins: 10080 },
-          },
-          other: { primary: { usedPercent: 30, windowDurationMins: 300 } },
+          zebra: { primary: { usedPercent: 30, windowDurationMins: 300 } },
+          alpha: { primary: { usedPercent: 20, windowDurationMins: 300 } },
         },
       })),
     });
     const provider = new CodexProvider(client, { error: vi.fn() });
+
     await provider.start();
     const snapshot = await provider.refresh(true);
-    expect(snapshot?.usageWindows).toHaveLength(3);
-    expect(snapshot?.usageWindows.map((window) => window.limitId)).toEqual([
-      'codex',
-      'codex',
-      'other',
-    ]);
+
+    expect(snapshot?.usageWindows.map((window) => window.limitId)).toEqual(['alpha', 'zebra']);
+  });
+
+  it('keeps the legacy indexed id when limitId is unavailable', async () => {
+    const provider = new CodexProvider(fakeClient(), { error: vi.fn() });
+
+    await provider.start();
+    const snapshot = await provider.refresh(true);
+
+    expect(snapshot?.usageWindows[0]?.limitId).toBeNull();
+    expect(snapshot?.usageWindows[0]?.id).toBe('codex-0');
   });
 
   it('exposes fallback interval, notification time, and single-flight state in diagnostics', async () => {
