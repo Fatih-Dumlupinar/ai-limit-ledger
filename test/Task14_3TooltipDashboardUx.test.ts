@@ -71,10 +71,10 @@ describe('Task 14.3 shared provider presentation', () => {
       { ...usageWindow('codex-2', 30, null, 10080), limitId: 'work' },
     ];
 
-    const english = buildProviderPresentationSummary(
-      snapshot('codex', { usageWindows }),
-      { now: NOW, language: 'en' },
-    );
+    const english = buildProviderPresentationSummary(snapshot('codex', { usageWindows }), {
+      now: NOW,
+      language: 'en',
+    });
     expect(english.quotaWindows.map((window) => window.label)).toEqual([
       '5-hour window (codex)',
       '7-day window (codex)',
@@ -82,10 +82,10 @@ describe('Task 14.3 shared provider presentation', () => {
     ]);
     expect(english.quotaWindows).toHaveLength(3);
 
-    const turkish = buildProviderPresentationSummary(
-      snapshot('codex', { usageWindows }),
-      { now: NOW, language: 'tr' },
-    );
+    const turkish = buildProviderPresentationSummary(snapshot('codex', { usageWindows }), {
+      now: NOW,
+      language: 'tr',
+    });
     expect(turkish.quotaWindows.map((window) => window.label)).toEqual([
       '5 saatlik pencere (codex)',
       '7 günlük pencere (codex)',

@@ -79,10 +79,9 @@ function codexUsageWindows(limits: ParsedLimit[]): ProviderSnapshot['usageWindow
     .map((limit, index) => ({ limit, index }))
     .sort((left, right) => compareCodexLimits(left.limit, right.limit) || left.index - right.index)
     .map(({ limit }, index) => ({
-      id:
-        limit.limitId?.trim()
-          ? `codex-${limit.limitId.trim()}-${limit.durationMins}`
-          : `codex-${index}`,
+      id: limit.limitId?.trim()
+        ? `codex-${limit.limitId.trim()}-${limit.durationMins}`
+        : `codex-${index}`,
       label: limit.label,
       limitId: limit.limitId ?? null,
       usedPercent: limit.usedPercent,

@@ -80,10 +80,10 @@ type DashboardExtensionContext = Pick<vscode.ExtensionContext, 'extension' | 'ex
 
 let dashboardExtensionContext: DashboardExtensionContext | undefined;
 
-const ExtensionMode =
-  (vscode as typeof vscode & { ExtensionMode?: { Development?: number } }).ExtensionMode ?? {
-    Development: 2,
-  };
+const ExtensionMode = (vscode as typeof vscode & { ExtensionMode?: { Development?: number } })
+  .ExtensionMode ?? {
+  Development: 2,
+};
 
 function dashboardExtensionVersion(context: DashboardExtensionContext | undefined): string {
   return String(context?.extension?.packageJSON?.version ?? 'unknown');

@@ -785,11 +785,10 @@ function reportHashes(vsixResult) {
 export const EXPECTED_MARKETPLACE_PUBLISHER = 'fatihdumlupinar-dev';
 export const EXPECTED_PACKAGE_NAME = 'ai-limit-ledger';
 export const EXPECTED_EXTENSION_ID = `${EXPECTED_MARKETPLACE_PUBLISHER}.${EXPECTED_PACKAGE_NAME}`;
-// Task 14.1 is the deliberate, separate version-bump task following Task 14's first Marketplace
-// release (0.7.0): it raises the version to 0.7.1 for the reusable manual-Marketplace /
-// automated-GitHub-Release model. Update this constant only as part of a deliberate version-bump
-// task — never as a side effect of an unrelated change.
-export const EXPECTED_TASK_VERSION = '0.7.1';
+// This is the deliberate version-bump target for the 0.8.0 release preparation. Update this
+// constant only as part of a deliberate version-bump task — never as a side effect of unrelated
+// changes.
+export const EXPECTED_TASK_VERSION = '0.8.0';
 
 export const PLACEHOLDER_PUBLISHER_VALUES = new Set([
   'local',
@@ -837,9 +836,7 @@ function checkExtensionIdentity() {
     issues.push(`computed extension id is "${actualId}", expected "${EXPECTED_EXTENSION_ID}"`);
   }
   if (pkg.version !== EXPECTED_TASK_VERSION) {
-    issues.push(
-      `version is "${pkg.version}", expected "${EXPECTED_TASK_VERSION}" (unchanged by Task 13)`,
-    );
+    issues.push(`version is "${pkg.version}", expected "${EXPECTED_TASK_VERSION}"`);
   }
   if (pkg.private !== true) {
     issues.push('private is not exactly true');

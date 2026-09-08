@@ -1,7 +1,8 @@
 # Publishing checklist
 
 Task 13 prepared Marketplace listing content and package identity. Task 14 adds the release system
-(`.github/workflows/release-candidate.yml` and `.github/workflows/finalize-release.yml`, both
+(`.github/workflows/release-candidate.yml` and `.github/workflows/finalize-release.yml`; the
+candidate workflow also starts on a version-manifest push, while finalization remains
 `workflow_dispatch`-only) described in `docs/RELEASE-PROCESS.md`. Neither this repository nor
 either workflow ever runs `vsce publish`, holds a PAT/`VSCE_PAT`, or calls a Marketplace publish
 API — the Marketplace upload is always a manual VSIX upload performed by the publisher-portal
@@ -16,7 +17,7 @@ in `README.md` / `README.tr.md`.
 - Publisher ID: **`fatihdumlupinar-dev`** (Marketplace publisher, distinct from the `Fatih-Dumlupinar` GitHub account).
 - Permanent extension ID once published: **`fatihdumlupinar-dev.ai-limit-ledger`**.
 - `package.json`'s `publisher` field has been changed from `local` to `fatihdumlupinar-dev`.
-  `name` (`ai-limit-ledger`), `displayName` (`AI Limit Ledger`), and `version` (`0.6.2`) are
+  `name` (`ai-limit-ledger`), `displayName` (`AI Limit Ledger`), and `version` (`0.8.0`) are
   unchanged.
 
 ## Installation identity change — read before switching
@@ -40,7 +41,7 @@ extensions, not an upgrade path:
   controlled migration is a manual, user-driven step described in
   `docs/INSTALLATION-MIGRATION-0.7.0.md`, done after the 0.7.0 Marketplace version is live.
 
-## Publishing 0.7.0 and later versions
+## Publishing 0.8.0 and later versions
 
 See `docs/RELEASE-PROCESS.md` for the full step-by-step procedure. In summary:
 
@@ -64,8 +65,8 @@ See `docs/RELEASE-PROCESS.md` for the full step-by-step procedure. In summary:
    current Entra workload-identity / federated-credential approach for Marketplace publishing is a
    separate, deliberately-scoped future task.
 5. For updates, increment the version, update `CHANGELOG.md`, run tests/package, then repeat the
-   candidate/upload/finalize cycle for the new version. The 0.7.0 development artifact is
-   `ai-limit-ledger-0.7.0.vsix`.
+   candidate/upload/finalize cycle for the new version. The 0.8.0 development artifact is
+   `ai-limit-ledger-0.8.0.vsix`.
 6. Before publishing, run both `npm audit` (requires npm registry network access — checks known
    advisories against the resolved dependency tree) and `npm run audit:release -- <file>.vsix` (a
    separate, dependency-free, fully offline local/VSIX content check) against the freshly packaged
@@ -89,7 +90,7 @@ confirm that CI, CodeQL, Secret Scan, and Dependency Review are green on the com
 Do not add Marketplace credentials to CI or to this repository — see `docs/RELEASE-PROCESS.md` for
 why.
 
-Before publishing 0.6.x, verify the Marketplace description clearly says that Copilot uses the
+Before publishing 0.8.0, verify the Marketplace description clearly says that Copilot uses the
 official GitHub Billing REST API plus VS Code auth or an explicit Plan-read PAT, and that Grok
 tries the official `x.ai/billing` ACP method first while its CLI-proxy fallback is experimental and
 opt-in. Do not imply xAI, GitHub, Microsoft, OpenAI, or Anthropic endorsement.

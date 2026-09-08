@@ -103,10 +103,7 @@ describe('CodexProvider notification-driven refresh', () => {
     await provider.start();
     const first = await provider.refresh(true);
 
-    expect(first?.usageWindows.map((window) => window.windowDurationMinutes)).toEqual([
-      300,
-      10080,
-    ]);
+    expect(first?.usageWindows.map((window) => window.windowDurationMinutes)).toEqual([300, 10080]);
     expect(first?.usageWindows.map((window) => window.id)).toEqual([
       'codex-codex-300',
       'codex-work-10080',

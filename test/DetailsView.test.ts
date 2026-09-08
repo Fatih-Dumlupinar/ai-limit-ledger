@@ -16,9 +16,9 @@ import { buildSafeDashboardDocumentModel, renderSafeDashboard } from '../src/ui/
 
 type DashboardContext = NonNullable<Parameters<typeof renderDashboard>[5]>;
 
-const packageJson = JSON.parse(
-  readFileSync(resolve(__dirname, '../package.json'), 'utf8'),
-) as { version: string };
+const packageJson = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf8')) as {
+  version: string;
+};
 
 function dashboardContext(version: string, extensionMode: number): DashboardContext {
   return {
