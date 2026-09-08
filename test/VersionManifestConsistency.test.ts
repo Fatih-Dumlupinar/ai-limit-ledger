@@ -34,7 +34,7 @@ describe('Task 10 release: version consistency across manifest and lockfile', ()
 
   it('the current version has a matching CHANGELOG.md entry', () => {
     expect(changelog).toMatch(
-      new RegExp(`##\\s*\\[?${packageJson.version.replace(/\./g, '\\.')}\\]?`),
+      new RegExp(`##\\s*\\[?${packageJson.version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?`),
     );
   });
 
