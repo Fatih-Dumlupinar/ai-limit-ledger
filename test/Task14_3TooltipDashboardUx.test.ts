@@ -9,6 +9,7 @@ import { formatProviderTooltip } from '../src/ui/ProviderStatusBarTooltip';
 import { providerSegmentText } from '../src/ui/StatusBarFormatter';
 import { buildSafeDashboardDocumentModel, renderSafeDashboard } from '../src/ui/SafeDashboard';
 import { createNonce, renderDashboard, setDashboardRenderSettings } from '../src/ui/DetailsView';
+import { getUiTextCatalog } from '../src/ui/UiTextCatalog';
 
 const NOW = Date.parse('2026-08-25T12:00:00.000Z');
 
@@ -61,6 +62,46 @@ describe('Task 14.3 shared provider presentation', () => {
       { now: NOW, language: 'en' },
     );
     expect(result.quotaWindows.map((window) => window.id)).toEqual(['five-hour', 'seven-day']);
+  });
+
+  it('labels Codex windows with their source bucket in English and Turkish', () => {
+    const usageWindows = [
+      { ...usageWindow('codex-0', 10), limitId: 'codex' },
+      { ...usageWindow('codex-1', 20, null, 10080), limitId: 'codex' },
+      { ...usageWindow('codex-2', 30, null, 10080), limitId: 'work' },
+    ];
+
+    const english = buildProviderPresentationSummary(snapshot('codex', { usageWindows }), {
+      now: NOW,
+      language: 'en',
+    });
+    expect(english.quotaWindows.map((window) => window.label)).toEqual([
+      '5-hour window (codex)',
+      '7-day window (codex)',
+      '7-day window (work)',
+    ]);
+    expect(english.quotaWindows).toHaveLength(3);
+
+    const turkish = buildProviderPresentationSummary(snapshot('codex', { usageWindows }), {
+      now: NOW,
+      language: 'tr',
+    });
+    expect(turkish.quotaWindows.map((window) => window.label)).toEqual([
+      '5 saatlik pencere (codex)',
+      '7 günlük pencere (codex)',
+      '7 günlük pencere (work)',
+    ]);
+  });
+
+  it('keeps the existing Codex label for a single bucket or null limitId', () => {
+    const single = buildProviderPresentationSummary(
+      snapshot('codex', {
+        usageWindows: [{ ...usageWindow('five-hour', 10), limitId: null }],
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(single.quotaWindows.map((window) => window.label)).toEqual(['5-hour window']);
   });
 
   it('deduplicates repeated quota windows by semantic id', () => {
@@ -179,6 +220,89 @@ describe('Task 14.3 shared provider presentation', () => {
     expect(result.quotaWindows[0]?.reset).toBeUndefined();
   });
 
+  it('shows "window not started" for an unused Codex window whose reset is now+duration', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBe('window-not-started');
+    expect(formatPresentedReset(reset, 'both')).toBe('Window has not started yet');
+    // Percentage stays visible even though the reset is a placeholder.
+    expect(result.quotaWindows[0]?.usedPercentage).toBe(0);
+    expect(result.quotaWindows[0]?.remainingPercentage).toBe(100);
+  });
+
+  it('shows the "window not started" text in Turkish', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'tr' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(formatPresentedReset(reset, 'both', getUiTextCatalog('tr'))).toBe(
+      'Pencere henüz başlamadı',
+    );
+  });
+
+  it('shows an absolute date for a zero-used Codex window with a fixed, non-sliding reset', () => {
+    const fixedResetsAt = Math.floor(NOW / 1000) + 3 * 24 * 60 * 60; // three days out
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', {
+        usageWindows: [usageWindow('five-hour', 0, fixedResetsAt, 300)],
+      }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBeUndefined();
+    expect(formatPresentedReset(reset, 'both')).not.toBe('Window has not started yet');
+  });
+
+  it('always shows an absolute date once a Codex window has any usage', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 1, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    const reset = result.quotaWindows[0]?.reset;
+    expect(reset?.status).toBeUndefined();
+    expect(formatPresentedReset(reset, 'both')).not.toBe('Window has not started yet');
+  });
+
+  it('treats a reset within the 2-minute tolerance of now+duration as not started', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60 + 119; // 1m59s drift
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBe('window-not-started');
+  });
+
+  it('treats a reset beyond the 2-minute tolerance of now+duration as a real date', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60 + 121; // 2m01s drift
+    const result = buildProviderPresentationSummary(
+      snapshot('codex', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBeUndefined();
+  });
+
+  it('does not treat a matching-duration reset as unstarted for other providers', () => {
+    const durationMins = 300;
+    const resetsAt = Math.floor(NOW / 1000) + durationMins * 60;
+    const result = buildProviderPresentationSummary(
+      snapshot('grok', { usageWindows: [usageWindow('five-hour', 0, resetsAt, durationMins)] }),
+      { now: NOW, language: 'en' },
+    );
+    expect(result.quotaWindows[0]?.reset?.status).toBeUndefined();
+  });
+
   it('stores absolute and relative reset text as separate semantic fields', () => {
     const result = buildProviderPresentationSummary(snapshot(), { now: NOW });
     const reset = result.quotaWindows[0]?.reset;
@@ -205,6 +329,106 @@ describe('Task 14.3 shared provider presentation', () => {
     expect(formatPresentedReset(reset, 'absolute')).not.toContain('in 5m');
   });
 
+  it('recalculates a last-known-good reset countdown without changing its percentages', () => {
+    const lkg = snapshot('claude', {
+      availability: 'stale-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+    });
+    const first = buildProviderPresentationSummary(lkg, { now: NOW, language: 'en' });
+    const later = buildProviderPresentationSummary(lkg, {
+      now: NOW + 2 * 60_000,
+      language: 'en',
+    });
+
+    expect(first.quotaWindows[0]?.reset?.relativeText).toBe('in 5m');
+    expect(later.quotaWindows[0]?.reset?.relativeText).toBe('in 3m');
+    expect(later.quotaWindows[0]).toMatchObject({
+      usedPercentage: 13,
+      remainingPercentage: 87,
+    });
+  });
+
+  it('marks a last-known-good window with a past reset as unknown in English and Turkish', () => {
+    const lkg = snapshot('claude', {
+      availability: 'stale-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+      usageWindows: [usageWindow('five-hour', 13, Math.floor(NOW / 1000) - 60)],
+    });
+    const en = getUiTextCatalog('en');
+    const tr = getUiTextCatalog('tr');
+    const english = buildProviderPresentationSummary(lkg, { now: NOW, language: 'en' });
+    const turkish = buildProviderPresentationSummary(lkg, { now: NOW, language: 'tr' });
+    const englishWindow = english.quotaWindows[0]!;
+    const turkishWindow = turkish.quotaWindows[0]!;
+
+    expect(englishWindow.usedPercentage).toBeUndefined();
+    expect(englishWindow.remainingPercentage).toBeUndefined();
+    expect(presentedPercentageText(englishWindow, 'remaining', en)).toBe(
+      'Percentage unknown until current data arrives',
+    );
+    expect(formatPresentedReset(englishWindow.reset, 'relative', en)).toBe(
+      'Window renewed — awaiting current data',
+    );
+    expect(presentedPercentageText(turkishWindow, 'remaining', tr)).toBe(
+      'Güncel veri gelene kadar yüzde bilinmiyor',
+    );
+    expect(formatPresentedReset(turkishWindow.reset, 'relative', tr)).toBe(
+      'Pencere yenilendi — güncel veri bekleniyor',
+    );
+    expect(JSON.stringify(englishWindow)).not.toMatch(/(?:0|100)%/);
+
+    setDashboardRenderSettings({ language: 'en', percentageMode: 'both', timeFormat: 'both' });
+    const dashboard = renderDashboard([lkg], createNonce());
+    expect(dashboard).toContain('Percentage unknown until current data arrives');
+    expect(dashboard).toContain('Window renewed — awaiting current data');
+  });
+
+  it('carries the past-reset status into the Safe Dashboard without mutating the source percentage', () => {
+    const lkg = snapshot('claude', {
+      availability: 'rate-limited-experimental',
+      stale: true,
+      source: 'Experimental — undocumented Anthropic usage endpoint',
+      metadata: { accountLimitsSource: 'last-known-good-oauth' },
+      usageWindows: [usageWindow('five-hour', 13, Math.floor(NOW / 1000) - 60)],
+    });
+    const model = buildSafeDashboardDocumentModel([lkg], {
+      now: NOW,
+      language: 'en',
+      providerVisibility: 'active-only',
+    });
+    const safeWindow = model.activeProviders[0]?.usageWindows[0];
+
+    expect(safeWindow?.usedPercent).toBeUndefined();
+    expect(safeWindow?.remainingPercent).toBeUndefined();
+    expect(renderSafeDashboard(model)).toContain('Window renewed — awaiting current data');
+    expect(lkg.usageWindows[0]?.usedPercent).toBe(13);
+    expect(lkg.usageWindows[0]?.remainingPercent).toBe(87);
+  });
+
+  it('keeps a missing last-known-good reset as not provided', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        availability: 'stale-experimental',
+        stale: true,
+        source: 'Experimental — undocumented Anthropic usage endpoint',
+        metadata: { accountLimitsSource: 'last-known-good-oauth' },
+        usageWindows: [usageWindow('five-hour', 13, null)],
+      }),
+      { now: NOW, language: 'en' },
+    );
+    const window = result.quotaWindows[0]!;
+    const en = getUiTextCatalog('en');
+
+    expect(window.usedPercentage).toBe(13);
+    expect(window.remainingPercentage).toBe(87);
+    expect(window.reset).toBeUndefined();
+    expect(formatPresentedReset(window.reset, 'relative', en)).toBe('Not provided');
+  });
+
   it('localizes the reset relative text in Turkish', () => {
     const result = buildProviderPresentationSummary(snapshot(), { now: NOW, language: 'tr' });
     expect(result.quotaWindows[0]?.reset?.relativeText).toContain('sonra');
@@ -225,6 +449,80 @@ describe('Task 14.3 shared provider presentation', () => {
       { now: NOW },
     );
     expect(result.freshness.summaryText).toBe('2m ago');
+  });
+
+  it('uses the Claude status-line source timestamp for successful update and snapshot age', () => {
+    const sourceUpdatedAt = NOW - 60 * 60_000;
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW,
+        checkedAt: NOW,
+        lastSuccessfulDataUpdate: NOW,
+        lastSuccessfulUpdateAt: NOW,
+        sourceUpdatedAt,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('1h ago');
+    expect(result.freshness.observedAt).toBe(sourceUpdatedAt);
+    expect(result.freshness.lastSuccessfulUpdateAt).toBe(sourceUpdatedAt);
+    expect(result.freshness.detailLines).toContainEqual({
+      label: 'Last successful update',
+      value: '1h ago',
+      at: sourceUpdatedAt,
+    });
+    expect(result.freshness.detailLines).toContainEqual({
+      label: 'Last check',
+      value: 'just now',
+      at: NOW,
+    });
+  });
+
+  it('keeps a fresh Claude status-line snapshot fresh', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW - 60 * 60_000,
+        checkedAt: NOW,
+        lastSuccessfulDataUpdate: NOW - 60 * 60_000,
+        sourceUpdatedAt: NOW,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('just now');
+  });
+
+  it('falls back to the existing Claude freshness fields without sourceUpdatedAt', () => {
+    const result = buildProviderPresentationSummary(
+      snapshot('claude', {
+        source: 'Official Claude Code status-line',
+        observedAt: NOW - 2 * 60_000,
+        checkedAt: NOW,
+        sourceUpdatedAt: null,
+      }),
+      { now: NOW, language: 'en' },
+    );
+
+    expect(result.freshness.summaryText).toBe('2m ago');
+  });
+
+  it('does not use sourceUpdatedAt for Codex, Copilot, or Grok freshness', () => {
+    for (const providerId of ['codex', 'copilot', 'grok']) {
+      const result = buildProviderPresentationSummary(
+        snapshot(providerId, {
+          observedAt: NOW,
+          checkedAt: NOW,
+          lastSuccessfulDataUpdate: NOW,
+          sourceUpdatedAt: NOW - 60 * 60_000,
+        }),
+        { now: NOW, language: 'en' },
+      );
+
+      expect(result.freshness.summaryText).toBe('just now');
+    }
   });
 
   it('marks stale data separately from fresh data', () => {

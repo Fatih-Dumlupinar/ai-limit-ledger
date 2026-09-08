@@ -94,7 +94,7 @@
   "config.cacheMaxAge": "How long non-sensitive last-known-good usage remains valid for display. It does not delete credential or cache files.",
   "config.cacheExpired": "Allow expired cached usage in the Dashboard with an explicit expired-data label. Expired values remain hidden from the status bar.",
   "config.claudeOAuthEnabled": "Experimental CLI-free Claude usage reads the existing credential read-only and never logs or stores the token.",
-  "config.claudeOAuthRefreshSeconds": "Minimum seconds between experimental CLI-free Claude usage requests.",
+  "config.claudeOAuthRefreshSeconds": "Minimum 600 seconds (5 minutes) between experimental CLI-free Claude usage requests to avoid persistent endpoint rate limits.",
   "config.copilotPlan": "Copilot monthly allowance source.",
   "config.copilotCredits": "User-configured monthly Copilot AI credits used when the plan is custom.",
   "config.copilotRefresh": "Minimum Copilot usage check interval in seconds.",

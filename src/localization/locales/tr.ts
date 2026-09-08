@@ -42,6 +42,8 @@ export const TR: TranslationCatalog = {
   rateLimited: 'Hız sınırına ulaşıldı',
   signInRequired: 'Oturum açma gerekli',
   authenticationRequired: 'Kimlik doğrulama gerekli',
+  claudeOAuthSessionRefreshRequired:
+    'Claude Code oturumu yenilenmeli — bir terminalde claude komutunu çalıştırın',
   cliNotInstalled: 'CLI kurulu değil',
   setupRequired: 'Kurulum gerekli',
   disabled: 'Devre dışı',
@@ -334,6 +336,9 @@ export const TR: TranslationCatalog = {
   selectProviderInSettings: 'Başlatmak için bu sağlayıcıyı ayarlardan seçin.',
   usageDataUnavailableYet: 'Kullanım verisi henüz kullanılamıyor.',
   percentageNotProvided: 'Yüzde sağlanmadı',
+  percentageUnknownAfterReset: 'Güncel veri gelene kadar yüzde bilinmiyor',
+  resetWindowRenewedAwaitingCurrentData: 'Pencere yenilendi — güncel veri bekleniyor',
+  resetWindowNotStarted: 'Pencere henüz başlamadı',
   noUsageData: 'Kullanım verisi yok',
   criticalNearlyExhausted: 'Kritik — limit neredeyse tükendi',
   lowRemainingCapacity: 'Kalan kapasite düşük',
@@ -469,5 +474,6 @@ export const TR: TranslationCatalog = {
   currentStreak: 'Mevcut seri',
   longestStreak: 'En uzun seri',
   appServer: 'App Server',
+  rateLimitWindowWithSource: '{window} ({source})',
   disconnected: 'Bağlı değil',
 };

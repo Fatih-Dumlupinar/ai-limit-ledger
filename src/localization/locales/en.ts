@@ -42,6 +42,8 @@ export const EN: TranslationCatalog = {
   rateLimited: 'Rate limited',
   signInRequired: 'Sign-in required',
   authenticationRequired: 'Authentication required',
+  claudeOAuthSessionRefreshRequired:
+    'Claude Code session must be refreshed — run the claude command in a terminal',
   cliNotInstalled: 'CLI not installed',
   setupRequired: 'Setup required',
   disabled: 'Disabled',
@@ -332,6 +334,9 @@ export const EN: TranslationCatalog = {
   selectProviderInSettings: 'Select this provider in settings to start it.',
   usageDataUnavailableYet: 'Usage data is not available yet.',
   percentageNotProvided: 'Percentage not provided',
+  percentageUnknownAfterReset: 'Percentage unknown until current data arrives',
+  resetWindowRenewedAwaitingCurrentData: 'Window renewed — awaiting current data',
+  resetWindowNotStarted: 'Window has not started yet',
   noUsageData: 'No usage data',
   criticalNearlyExhausted: 'Critical — limit nearly exhausted',
   lowRemainingCapacity: 'Low remaining capacity',
@@ -463,5 +468,6 @@ export const EN: TranslationCatalog = {
   currentStreak: 'Current streak',
   longestStreak: 'Longest streak',
   appServer: 'App Server',
+  rateLimitWindowWithSource: '{window} ({source})',
   disconnected: 'Disconnected',
 };

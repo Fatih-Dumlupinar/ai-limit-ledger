@@ -3,7 +3,7 @@ import {
   CodexAppServerClient,
   type CodexClientDiagnostics,
 } from '../appServer/CodexAppServerClient';
-import type { RateLimitsResult } from '../appServer/types';
+import type { ParsedLimit, RateLimitsResult } from '../appServer/types';
 import { parseRateLimits, parseUsage } from '../limits/RateLimitParser';
 import {
   diagnosticForError,
@@ -58,6 +58,37 @@ type Settled<T> = PromiseSettledResult<T>;
 function isRateLimitsResultLike(value: unknown): value is RateLimitsResult {
   if (typeof value !== 'object' || value === null) return false;
   return 'rateLimits' in value || 'rateLimitsByLimitId' in value;
+}
+
+function compareCodexLimits(left: ParsedLimit, right: ParsedLimit): number {
+  if (left.durationMins === null && right.durationMins !== null) return 1;
+  if (left.durationMins !== null && right.durationMins === null) return -1;
+  if (
+    left.durationMins !== null &&
+    right.durationMins !== null &&
+    left.durationMins !== right.durationMins
+  ) {
+    return left.durationMins - right.durationMins;
+  }
+
+  return (left.limitId ?? '').localeCompare(right.limitId ?? '');
+}
+
+function codexUsageWindows(limits: ParsedLimit[]): ProviderSnapshot['usageWindows'] {
+  return limits
+    .map((limit, index) => ({ limit, index }))
+    .sort((left, right) => compareCodexLimits(left.limit, right.limit) || left.index - right.index)
+    .map(({ limit }, index) => ({
+      id: limit.limitId?.trim()
+        ? `codex-${limit.limitId.trim()}-${limit.durationMins}`
+        : `codex-${index}`,
+      label: limit.label,
+      limitId: limit.limitId ?? null,
+      usedPercent: limit.usedPercent,
+      remainingPercent: limit.remainingPercent,
+      resetsAt: limit.resetsAt,
+      windowDurationMinutes: limit.durationMins,
+    }));
 }
 
 export function clampFallbackIntervalMs(ms: number): number {
@@ -160,14 +191,7 @@ export class CodexProvider implements ProviderAdapter {
       availability: 'ready',
       connected: true,
       plan: parsed.planType ?? this.snapshot.plan,
-      usageWindows: parsed.limits.map((limit, i) => ({
-        id: `codex-${i}`,
-        label: limit.label,
-        usedPercent: limit.usedPercent,
-        remainingPercent: limit.remainingPercent,
-        resetsAt: limit.resetsAt,
-        windowDurationMinutes: limit.durationMins,
-      })),
+      usageWindows: codexUsageWindows(parsed.limits),
       observedAt: now,
       checkedAt: now,
       lastSuccessfulDataUpdate: now,
@@ -266,15 +290,7 @@ export class CodexProvider implements ProviderAdapter {
           connected: true,
           plan: parsed?.planType ?? accountValue?.account?.planType ?? null,
           cliVersion: parsed?.cliVersion ?? cliVersion,
-          usageWindows:
-            parsed?.limits.map((limit, i) => ({
-              id: `codex-${i}`,
-              label: limit.label,
-              usedPercent: limit.usedPercent,
-              remainingPercent: limit.remainingPercent,
-              resetsAt: limit.resetsAt,
-              windowDurationMinutes: limit.durationMins,
-            })) ?? [],
+          usageWindows: parsed ? codexUsageWindows(parsed.limits) : [],
           source: 'Official Codex App Server',
           observedAt,
           checkedAt,

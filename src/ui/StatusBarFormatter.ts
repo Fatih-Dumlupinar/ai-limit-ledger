@@ -58,7 +58,11 @@ export function providerSegmentText(
   }
   switch (presentation.normalizedState) {
     case 'authentication-required':
-      return `${name} ${catalog.signInRequired.toLowerCase()}`;
+      return `${name} ${
+        presentation.statusKey === 'claudeOAuthSessionRefreshRequired'
+          ? catalog.claudeOAuthSessionRefreshRequired
+          : catalog.signInRequired.toLowerCase()
+      }`;
     case 'cli-not-installed':
       return `${name} ${catalog.cliNotInstalled.toLowerCase()}`;
     case 'integration-disabled':

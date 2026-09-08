@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   generatePosixWrapperScript,
+  generateStandalonePosixScript,
+  generateStandaloneWindowsScript,
   generateWindowsWrapperScript,
 } from '../../src/providers/claude/ClaudeWrapperGenerator';
 
@@ -70,5 +72,64 @@ describe('generatePosixWrapperScript', () => {
   it('caps output and applies a timeout', () => {
     expect(script).toContain('maxBuffer: MAX_OUTPUT_BYTES');
     expect(script).toContain('timeout: TIMEOUT_MS');
+  });
+});
+
+describe('critical snapshot guard in all generated variants', () => {
+  const variants = [
+    {
+      name: 'Windows standalone',
+      script: generateStandaloneWindowsScript(cfg.snapshotPath, cfg.maxInputBytes),
+      safeToken: '$safe = [ordered]@{',
+      guardToken: '$hasCriticalData =',
+      emptyExit: 'if (-not $hasCriticalData) { exit 0 }',
+      guardedWrite: null,
+      tempToken: '$tmp =',
+    },
+    {
+      name: 'Windows chained',
+      script: generateWindowsWrapperScript(cfg),
+      safeToken: '$safe = [ordered]@{',
+      guardToken: '$hasCriticalData =',
+      emptyExit: null,
+      guardedWrite: 'if ($hasCriticalData) {',
+      tempToken: '$tmp =',
+    },
+    {
+      name: 'POSIX standalone',
+      script: generateStandalonePosixScript(cfg.snapshotPath, cfg.maxInputBytes),
+      safeToken: 'const safe = {',
+      guardToken: 'const hasCriticalData =',
+      emptyExit: 'if (!hasCriticalData) process.exit(0);',
+      guardedWrite: null,
+      tempToken: 'const tmp =',
+    },
+    {
+      name: 'POSIX chained',
+      script: generatePosixWrapperScript(cfg),
+      safeToken: 'const safe = {',
+      guardToken: 'const hasCriticalData =',
+      emptyExit: null,
+      guardedWrite: 'if (hasCriticalData) {',
+      tempToken: 'const tmp =',
+    },
+  ];
+
+  it.each(variants)('$name checks critical fields after safe construction', (variant) => {
+    expect(variant.script).toContain(variant.guardToken);
+    expect(variant.script).toContain('model.display_name');
+    expect(variant.script).toContain('rate_limits.five_hour');
+    expect(variant.script).toContain('context_window.used_percentage');
+    expect(variant.script.indexOf(variant.guardToken)).toBeGreaterThan(
+      variant.script.indexOf(variant.safeToken),
+    );
+    expect(variant.script.indexOf(variant.guardToken)).toBeLessThan(
+      variant.script.indexOf(variant.tempToken),
+    );
+    if (variant.emptyExit) expect(variant.script).toContain(variant.emptyExit);
+    if (variant.guardedWrite) expect(variant.script).toContain(variant.guardedWrite);
+    expect(variant.script).toContain(
+      variant.script.includes('schemaVersion = 2') ? 'schemaVersion = 2' : 'schemaVersion: 2',
+    );
   });
 });

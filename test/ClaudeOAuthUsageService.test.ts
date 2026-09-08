@@ -46,7 +46,7 @@ function makeService(overrides: Partial<ClaudeOAuthUsageServiceDeps> = {}): {
     fetchImpl: okFetch(),
     globalState,
     enabled: () => true,
-    refreshSecondsProvider: () => 120,
+    refreshSecondsProvider: () => 600,
     windowId: 'window-a',
     now: () => 1_000_000,
     ...overrides,
@@ -120,7 +120,7 @@ describe('ClaudeOAuthUsageService refresh gating', () => {
     return makeService({ globalState, ...overrides });
   }
 
-  it('never issues a new network request within the 120-second minimum interval', async () => {
+  it('never issues a new network request within the 600-second minimum interval', async () => {
     let calls = 0;
     const countingFetch: FetchLike = async (...args) => {
       calls += 1;
@@ -129,7 +129,7 @@ describe('ClaudeOAuthUsageService refresh gating', () => {
     let now = 1_000_000;
     const { service } = await consentedService({ fetchImpl: countingFetch, now: () => now });
     await service.requestRefresh('manual');
-    now += 60_000; // only 60s later — still inside the 120s floor
+    now += 60_000; // only 60s later — still inside the 600s floor
     await service.requestRefresh('activity');
     expect(calls).toBe(1);
   });
@@ -201,9 +201,10 @@ describe('ClaudeOAuthUsageService refresh gating', () => {
       transportVersion: 1,
     });
     let mode: 'ok' | '429' = 'ok';
+    let usedPercent = 55;
     const toggledFetch: FetchLike = async (...args) =>
       mode === 'ok'
-        ? okFetch(55)(...args)
+        ? okFetch(usedPercent)(...args)
         : ({
             status: 429,
             ok: false,
@@ -215,11 +216,16 @@ describe('ClaudeOAuthUsageService refresh gating', () => {
     const first = await service.requestRefresh('manual');
     expect(first.fiveHour?.usedPercent).toBe(55);
 
+    usedPercent = 66;
+    now += 700_000;
+    const refreshed = await service.requestRefresh('manual');
+    expect(refreshed.fiveHour?.usedPercent).toBe(66);
+
     mode = '429';
-    now += 200_000; // past the 120s minimum interval so a real request is attempted
+    now += 700_000; // past the 600s minimum interval so a real request is attempted
     const second = await service.requestRefresh('manual');
     expect(second.availability).toBe('rate-limited');
-    expect(second.fiveHour?.usedPercent).toBe(55);
+    expect(second.fiveHour?.usedPercent).toBe(66);
     expect(second.stale).toBe(true);
   });
 });

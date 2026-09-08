@@ -59,6 +59,8 @@ export interface ProviderCapabilities {
 export interface UsageWindow {
   id: string;
   label: string;
+  /** Source bucket identifier when the provider reports multiple rate-limit buckets. */
+  limitId?: string | null;
   usedPercent: number;
   remainingPercent: number;
   resetsAt: number | null;

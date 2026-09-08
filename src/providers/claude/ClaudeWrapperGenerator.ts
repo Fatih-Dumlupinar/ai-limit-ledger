@@ -57,13 +57,22 @@ if ($inputBytes -le $maxInputBytes) {
       exceeds_200k_tokens = $data.exceeds_200k_tokens
       output_style = [ordered]@{ name = $data.output_style.name }
     }
-    $tmp = "$snapshotPath.ai-limit-ledger-tmp-$([guid]::NewGuid().ToString('N'))"
-    try {
-      [System.IO.File]::WriteAllText($tmp, ($safe | ConvertTo-Json -Depth 6 -Compress), (New-Object System.Text.UTF8Encoding($false)))
-      try { icacls $tmp /inheritance:r /grant:r "$($env:USERNAME):(F)" 2>$null | Out-Null } catch {}
-      Move-Item -LiteralPath $tmp -Destination $snapshotPath -Force
-    } finally {
-      if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    function Test-NonEmptyValue([object]$value) {
+      if ($null -eq $value) { return $false }
+      if ($value -is [string]) { return -not [string]::IsNullOrWhiteSpace($value) }
+      if ($value -is [System.Collections.IDictionary]) { return $value.Count -gt 0 }
+      if ($value -is [pscustomobject]) { return @($value.PSObject.Properties).Count -gt 0 }
+      return $true
+    }
+    $hasCriticalData = (Test-NonEmptyValue $safe.model.display_name) -or (Test-NonEmptyValue $safe.rate_limits.five_hour) -or (Test-NonEmptyValue $safe.context_window.used_percentage)
+    if ($hasCriticalData) {
+      $tmp = "$snapshotPath.ai-limit-ledger-tmp-$([guid]::NewGuid().ToString('N'))"
+      try {
+        [System.IO.File]::WriteAllText($tmp, ($safe | ConvertTo-Json -Depth 6 -Compress), (New-Object System.Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $tmp -Destination $snapshotPath -Force
+      } finally {
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+      }
     }
   } catch {
     # Snapshot write is best-effort; the chained status line must keep working regardless.
@@ -131,6 +140,7 @@ $maxInputBytes = ${maxInputBytes}
 $snapshotPath = ${snapshot}
 $stdinText = [Console]::In.ReadToEnd()
 if ([Text.Encoding]::UTF8.GetByteCount($stdinText) -gt $maxInputBytes) { exit 1 }
+if ([string]::IsNullOrWhiteSpace($stdinText)) { exit 0 }
 $data = $stdinText | ConvertFrom-Json
 $safe = [ordered]@{
   schemaVersion = 2
@@ -164,6 +174,15 @@ $safe = [ordered]@{
   exceeds_200k_tokens = $data.exceeds_200k_tokens
   output_style = [ordered]@{ name = $data.output_style.name }
 }
+function Test-NonEmptyValue([object]$value) {
+  if ($null -eq $value) { return $false }
+  if ($value -is [string]) { return -not [string]::IsNullOrWhiteSpace($value) }
+  if ($value -is [System.Collections.IDictionary]) { return $value.Count -gt 0 }
+  if ($value -is [pscustomobject]) { return @($value.PSObject.Properties).Count -gt 0 }
+  return $true
+}
+$hasCriticalData = (Test-NonEmptyValue $safe.model.display_name) -or (Test-NonEmptyValue $safe.rate_limits.five_hour) -or (Test-NonEmptyValue $safe.context_window.used_percentage)
+if (-not $hasCriticalData) { exit 0 }
 $tmp = "$snapshotPath.ai-limit-ledger-tmp-$([guid]::NewGuid().ToString('N'))"
 [System.IO.File]::WriteAllText($tmp, ($safe | ConvertTo-Json -Depth 6 -Compress), (New-Object System.Text.UTF8Encoding($false)))
 Move-Item -LiteralPath $tmp -Destination $snapshotPath -Force
@@ -181,6 +200,7 @@ let s = '';
 process.stdin.on('data', (d) => (s += d));
 process.stdin.on('end', () => {
   if (Buffer.byteLength(s) > MAX_INPUT_BYTES) process.exit(1);
+  if (s.trim().length === 0) process.exit(0);
   const data = JSON.parse(s);
   const safe = {
     schemaVersion: 2,
@@ -214,6 +234,17 @@ process.stdin.on('end', () => {
     exceeds_200k_tokens: data.exceeds_200k_tokens,
     output_style: { name: data.output_style && data.output_style.name },
   };
+  const isNonEmptyValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string') return value.trim().length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+  };
+  const hasCriticalData =
+    isNonEmptyValue(safe.model.display_name) ||
+    isNonEmptyValue(safe.rate_limits.five_hour) ||
+    isNonEmptyValue(safe.context_window.used_percentage);
+  if (!hasCriticalData) process.exit(0);
   const tmp = SNAPSHOT_PATH + '.ai-limit-ledger-tmp-' + process.pid + '-' + Date.now();
   fs.writeFileSync(tmp, JSON.stringify(safe), { mode: 0o600 });
   fs.renameSync(tmp, SNAPSHOT_PATH);
@@ -244,8 +275,10 @@ process.stdin.on('end', () => {
   const input = Buffer.concat(chunks);
   if (input.length <= MAX_INPUT_BYTES) {
     try {
-      const data = JSON.parse(input.toString('utf8'));
-      const safe = {
+      const inputText = input.toString('utf8');
+      if (inputText.trim().length > 0) {
+        const data = JSON.parse(inputText);
+        const safe = {
         schemaVersion: 2,
         observedAt: new Date().toISOString(),
         version: data.version,
@@ -276,10 +309,23 @@ process.stdin.on('end', () => {
         thinking: { enabled: data.thinking && data.thinking.enabled },
         exceeds_200k_tokens: data.exceeds_200k_tokens,
         output_style: { name: data.output_style && data.output_style.name },
-      };
-      const tmp = SNAPSHOT_PATH + '.ai-limit-ledger-tmp-' + process.pid + '-' + Date.now();
-      fs.writeFileSync(tmp, JSON.stringify(safe), { mode: 0o600 });
-      fs.renameSync(tmp, SNAPSHOT_PATH);
+        };
+        const isNonEmptyValue = (value) => {
+          if (value === null || value === undefined) return false;
+          if (typeof value === 'string') return value.trim().length > 0;
+          if (typeof value === 'object') return Object.keys(value).length > 0;
+          return true;
+        };
+        const hasCriticalData =
+          isNonEmptyValue(safe.model.display_name) ||
+          isNonEmptyValue(safe.rate_limits.five_hour) ||
+          isNonEmptyValue(safe.context_window.used_percentage);
+        if (hasCriticalData) {
+          const tmp = SNAPSHOT_PATH + '.ai-limit-ledger-tmp-' + process.pid + '-' + Date.now();
+          fs.writeFileSync(tmp, JSON.stringify(safe), { mode: 0o600 });
+          fs.renameSync(tmp, SNAPSHOT_PATH);
+        }
+      }
     } catch (e) {
       // Snapshot write is best-effort; the chained status line must keep working regardless.
     }
