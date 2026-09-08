@@ -19,10 +19,17 @@ import type { ProviderId, ProviderSnapshot, UsageWindow } from '../providers/typ
 
 export type PresentedTimeFormat = 'locale' | 'relative' | 'absolute' | 'both';
 
+export type PresentedResetStatus = 'renewed-awaiting-current-data' | 'window-not-started';
+
+/** Reset timestamps this fresh from "now" are presumed to be `now + windowDuration`, i.e. a
+ * sliding placeholder rather than a fixed deadline (see `resetFor`). */
+const WINDOW_NOT_STARTED_TOLERANCE_MS = 2 * 60_000;
+
 export interface PresentedReset {
   at: number;
   absoluteText: string;
   relativeText: string;
+  status?: PresentedResetStatus;
 }
 
 export interface PresentedQuotaWindow {
@@ -52,6 +59,12 @@ export interface PresentedFreshnessLine {
   label: string;
   value: string;
   at?: number;
+}
+
+function claudeStatusLineTimestamp(snapshot: ProviderSnapshot): number | undefined {
+  if (normalizeProviderId(snapshot.providerId) !== 'claude') return undefined;
+  if (snapshot.source !== 'Official Claude Code status-line') return undefined;
+  return validTimestamp(snapshot.sourceUpdatedAt);
 }
 
 export interface PresentedHealth {
@@ -91,15 +104,67 @@ function validTimestamp(value: unknown): number | undefined {
   return number !== undefined && number > 0 ? number : undefined;
 }
 
-function resetFor(value: unknown, now: number, catalog: UiTextCatalog): PresentedReset | undefined {
+function isUnstartedCodexWindow(
+  providerId: string,
+  usedPercent: unknown,
+  windowDurationMinutes: unknown,
+  at: number,
+  now: number,
+): boolean {
+  if (providerId !== 'codex') return false;
+  if (finite(usedPercent) !== 0) return false;
+  const durationMins = finite(windowDurationMinutes);
+  if (durationMins === undefined) return false;
+  const expectedAt = now + durationMins * 60_000;
+  return Math.abs(at - expectedAt) <= WINDOW_NOT_STARTED_TOLERANCE_MS;
+}
+
+function resetFor(
+  providerId: string,
+  value: unknown,
+  usedPercent: unknown,
+  windowDurationMinutes: unknown,
+  now: number,
+  catalog: UiTextCatalog,
+  lastKnownGood: boolean,
+): PresentedReset | undefined {
   if (value === null || value === undefined) return undefined;
   const at = normalizeToEpochMs(value, 'unix-seconds', now);
   if (at === null) return undefined;
+  if (isUnstartedCodexWindow(providerId, usedPercent, windowDurationMinutes, at, now)) {
+    const status = catalog.resetWindowNotStarted;
+    return {
+      at,
+      absoluteText: status,
+      relativeText: status,
+      status: 'window-not-started',
+    };
+  }
+  if (lastKnownGood && at <= now) {
+    const status = catalog.resetWindowRenewedAwaitingCurrentData;
+    return {
+      at,
+      absoluteText: status,
+      relativeText: status,
+      status: 'renewed-awaiting-current-data',
+    };
+  }
   return {
     at,
     absoluteText: formatConfiguredTime(at, now, 'absolute', catalog, 'deadline'),
     relativeText: formatConfiguredTime(at, now, 'relative', catalog, 'deadline'),
   };
+}
+
+function isLastKnownGoodSnapshot(snapshot: ProviderSnapshot): boolean {
+  return (
+    snapshot.stale ||
+    snapshot.availability === 'stale' ||
+    snapshot.availability === 'stale-experimental' ||
+    snapshot.availability === 'rate-limited' ||
+    snapshot.availability === 'rate-limited-experimental' ||
+    snapshot.metadata?.accountLimitsSource === 'last-known-good-oauth'
+  );
 }
 
 function sourceWindowForCopilot(snapshot: ProviderSnapshot): UsageWindow | undefined {
@@ -149,14 +214,31 @@ function orderedWindows(snapshot: ProviderSnapshot): UsageWindow[] {
 
 function presentedWindow(
   providerId: string,
+  snapshot: ProviderSnapshot,
   window: UsageWindow,
   now: number,
   thresholds: Parameters<typeof createRemainingCapacityProgress>[1],
   catalog: UiTextCatalog,
 ): PresentedQuotaWindow {
-  const progress = createRemainingCapacityProgress(window.usedPercent, thresholds);
-  const usedPercentage = progress?.usedPercent ?? percentage(window.usedPercent);
-  const remainingPercentage = progress?.remainingPercent ?? percentage(window.remainingPercent);
+  const reset = resetFor(
+    providerId,
+    window.resetsAt,
+    window.usedPercent,
+    window.windowDurationMinutes,
+    now,
+    catalog,
+    isLastKnownGoodSnapshot(snapshot),
+  );
+  const resetNeedsCurrentData = reset?.status === 'renewed-awaiting-current-data';
+  const progress = resetNeedsCurrentData
+    ? undefined
+    : createRemainingCapacityProgress(window.usedPercent, thresholds);
+  const usedPercentage = resetNeedsCurrentData
+    ? undefined
+    : (progress?.usedPercent ?? percentage(window.usedPercent));
+  const remainingPercentage = resetNeedsCurrentData
+    ? undefined
+    : (progress?.remainingPercent ?? percentage(window.remainingPercent));
   const rawId = String(window.id || '')
     .trim()
     .toLowerCase();
@@ -164,13 +246,18 @@ function presentedWindow(
     providerId === 'copilot' && rawId === 'copilot-monthly-ai-credits'
       ? 'monthly-ai-credits'
       : String(window.id || '');
-  const label = localizedRateLimitWindowLabel(
+  const baseLabel = localizedRateLimitWindowLabel(
     id,
     window.label,
     window.windowDurationMinutes,
     catalog,
   );
-  const reset = resetFor(window.resetsAt, now, catalog);
+  const sourceBucket = providerId === 'codex' ? window.limitId?.trim() : undefined;
+  const label = sourceBucket
+    ? catalog.rateLimitWindowWithSource
+        .replace('{window}', baseLabel)
+        .replace('{source}', sourceBucket)
+    : baseLabel;
   return {
     id: id || label,
     label: providerId === 'claude' ? `${catalog.accountLimit} — ${label}` : label,
@@ -219,14 +306,17 @@ function freshnessFor(
   catalog: UiTextCatalog,
 ): PresentedFreshness {
   const checkedAt = validTimestamp(snapshot.checkedAt);
-  const observedAt = validTimestamp(snapshot.observedAt);
+  const readObservedAt = validTimestamp(snapshot.observedAt);
+  const sourceObservedAt = claudeStatusLineTimestamp(snapshot);
+  const observedAt = sourceObservedAt ?? readObservedAt;
   const hasNumericData = windows.some(
     (window) => window.usedPercentage !== undefined || window.remainingPercentage !== undefined,
   );
   const lastSuccessfulUpdateAt =
+    sourceObservedAt ??
     validTimestamp(snapshot.lastSuccessfulUpdateAt) ??
     validTimestamp(snapshot.lastSuccessfulDataUpdate) ??
-    (hasNumericData ? observedAt : undefined);
+    (hasNumericData ? readObservedAt : undefined);
   const primaryAt = lastSuccessfulUpdateAt ?? observedAt ?? checkedAt;
   const state = isProblemState(snapshot);
   const summaryText = primaryAt
@@ -289,7 +379,7 @@ export function buildProviderPresentationSummary(
   const sourceKind =
     options.resolved?.sourceKind ?? sourceKindForSnapshot(snapshot.source, snapshot.metadata);
   const quotaWindows = orderedWindows(snapshot).map((window) =>
-    presentedWindow(providerId, window, now, options.thresholds ?? {}, catalog),
+    presentedWindow(providerId, snapshot, window, now, options.thresholds ?? {}, catalog),
   );
   const provider =
     providerId === 'codex' ||
@@ -318,6 +408,9 @@ export function formatPresentedReset(
   catalog: UiTextCatalog = getUiTextCatalog(),
 ): string {
   if (!reset) return catalog.notProvided;
+  if (reset.status === 'renewed-awaiting-current-data')
+    return catalog.resetWindowRenewedAwaitingCurrentData;
+  if (reset.status === 'window-not-started') return catalog.resetWindowNotStarted;
   if (format === 'relative') return reset.relativeText;
   if (format === 'absolute' || format === 'locale') return reset.absoluteText;
   return `${reset.absoluteText} · ${reset.relativeText}`;
@@ -328,6 +421,8 @@ export function presentedPercentageText(
   mode: 'remaining' | 'used' | 'both' = 'remaining',
   catalog: UiTextCatalog = getUiTextCatalog(),
 ): string | undefined {
+  if (window.reset?.status === 'renewed-awaiting-current-data')
+    return catalog.percentageUnknownAfterReset;
   const remaining =
     window.remainingPercentage === undefined
       ? undefined

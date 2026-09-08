@@ -2,7 +2,7 @@
   "name": "ai-limit-ledger",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "fatihdumlupinar-dev",
   "private": true,
   "preview": true,
@@ -481,8 +481,8 @@
         },
         "aiLimitLedger.claude.experimentalOAuthUsage.refreshSeconds": {
           "type": "number",
-          "default": 120,
-          "minimum": 120,
+          "default": 600,
+          "minimum": 600,
           "maximum": 3600,
           "scope": "machine",
           "description": "%config.claudeOAuthRefreshSeconds%"

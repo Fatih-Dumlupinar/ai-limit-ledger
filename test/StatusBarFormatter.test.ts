@@ -70,6 +70,20 @@ describe('StatusBarFormatter', () => {
     expect(providerSegmentText(snapshot, 'remaining')).toContain('30% left');
   });
 
+  it('shows the Claude OAuth session-refresh guidance in the status bar', () => {
+    const snapshot = {
+      ...claudeSnapshot('authentication-required'),
+      metadata: { oauthAvailability: 'authentication-required' },
+    } satisfies ProviderSnapshot;
+
+    expect(providerSegmentText(snapshot, 'remaining', { language: 'en' })).toContain(
+      'Claude Code session must be refreshed — run the claude command in a terminal',
+    );
+    expect(providerSegmentText(snapshot, 'remaining', { language: 'tr' })).toContain(
+      'Claude Code oturumu yenilenmeli — bir terminalde claude komutunu çalıştırın',
+    );
+  });
+
   it('never flags manual-only as an error state', () => {
     expect(hasErrorState([claudeSnapshot('manual-only')])).toBe(false);
   });

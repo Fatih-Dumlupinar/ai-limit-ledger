@@ -59,12 +59,15 @@ export function spawnWrapperOnce(
       resolve({ stdout: '', exitCode: null, timedOut: false });
     });
 
-    child.on('close', (code) => {
+    const settle = (code: number | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve({ stdout, exitCode: code, timedOut });
-    });
+    };
+
+    child.on('exit', settle);
+    child.on('close', settle);
 
     child.stdin.write(stdin, 'utf8');
     child.stdin.end();

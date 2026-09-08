@@ -344,9 +344,9 @@ export function normalizeSettings(raw: RawSettings = {}): EffectiveSettings {
       ),
       claudeOAuthSeconds: safeNumber(
         raw[SETTING_KEYS.claudeOAuthRefreshSeconds],
-        120,
+        600,
         SETTING_KEYS.claudeOAuthRefreshSeconds,
-        120,
+        600,
         3600,
         diagnostics,
       ),

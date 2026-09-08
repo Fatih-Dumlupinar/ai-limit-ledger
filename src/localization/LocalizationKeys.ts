@@ -40,6 +40,7 @@ export const LOCALIZATION_KEYS = [
   'rateLimited',
   'signInRequired',
   'authenticationRequired',
+  'claudeOAuthSessionRefreshRequired',
   'cliNotInstalled',
   'setupRequired',
   'disabled',
@@ -260,6 +261,9 @@ export const LOCALIZATION_KEYS = [
   'selectProviderInSettings',
   'usageDataUnavailableYet',
   'percentageNotProvided',
+  'percentageUnknownAfterReset',
+  'resetWindowRenewedAwaitingCurrentData',
+  'resetWindowNotStarted',
   'noUsageData',
   'criticalNearlyExhausted',
   'lowRemainingCapacity',
@@ -435,6 +439,7 @@ export const LOCALIZATION_KEYS = [
   'claudeOAuthHookRemoveWarning',
   'claudeOAuthEnabled',
   'claudeOAuthDisabled',
+  'rateLimitWindowWithSource',
 ] as const;
 
 export type LocalizationKey = (typeof LOCALIZATION_KEYS)[number];

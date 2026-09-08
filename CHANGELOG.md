@@ -1,7 +1,24 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.0] - 2026-09-08
 
+- Claude reset times are now visible when OAuth usage data includes ISO-8601 reset timestamps.
+- Authentication guidance now tells you what action to take when setup is incomplete.
+- OAuth usage checks now wait 600 seconds between polls, reducing unnecessary requests and 429s.
+- Codex usage windows show their source bucket, use stable identifiers, and keep a deterministic
+  order.
+- Windows that have not started no longer show a misleading moving reset date.
+- Reset countdowns remain based on the last known good snapshot, and snapshot age reflects the
+  provider observation time rather than the local read time.
+- The chained Claude wrapper now writes its snapshot reliably, including on Windows.
+- Claude snapshots are not replaced when a response has none of the critical usage fields.
+- Empty or malformed provider responses keep the last reliable state while the status line
+  continues to work.
+- The dashboard reads its displayed version from the extension manifest.
+- Tooltips and dashboard views now show quota windows consistently, distinguish missing data from
+  zero values, and keep current quota information prominent.
+- Freshness and source information are clearer, with improved reset formatting and accessibility
+  semantics across the compact and detailed views.
 - **Task 14.3 — Tooltip and Dashboard UI/UX refinement.** No version bump, provider API,
   release, or workflow changes. Added a shared typed provider-presentation model so the status
   bar, compact/detailed tooltips, Rich Dashboard, and Safe Dashboard share quota ordering,

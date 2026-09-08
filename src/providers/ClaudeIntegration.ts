@@ -686,8 +686,8 @@ export async function openCliEnhancedModeDocs(
 
 const EXPERIMENTAL_OAUTH_USAGE_SETTING = 'claude.experimentalOAuthUsage.enabled';
 const EXPERIMENTAL_OAUTH_REFRESH_SECONDS_SETTING = 'claude.experimentalOAuthUsage.refreshSeconds';
-const DEFAULT_EXPERIMENTAL_OAUTH_REFRESH_SECONDS = 120;
-const MIN_EXPERIMENTAL_OAUTH_REFRESH_SECONDS = 120;
+const DEFAULT_EXPERIMENTAL_OAUTH_REFRESH_SECONDS = 600;
+const MIN_EXPERIMENTAL_OAUTH_REFRESH_SECONDS = 600;
 const MAX_EXPERIMENTAL_OAUTH_REFRESH_SECONDS = 3600;
 
 /** Reads the `aiLimitLedger.claude.experimentalOAuthUsage.enabled` machine-scope setting; defaults to opted-out. */

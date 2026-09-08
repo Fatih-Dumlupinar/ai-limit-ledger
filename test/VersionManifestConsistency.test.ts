@@ -33,11 +33,13 @@ describe('Task 10 release: version consistency across manifest and lockfile', ()
   });
 
   it('the current version has a matching CHANGELOG.md entry', () => {
-    expect(changelog).toMatch(new RegExp(`##\\s*${packageJson.version.replace(/\./g, '\\.')}`));
+    expect(changelog).toMatch(
+      new RegExp(`##\\s*\\[?${packageJson.version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?`),
+    );
   });
 
   it('the CHANGELOG entry for the current version is the first versioned (most recent) one', () => {
-    const firstVersionHeading = changelog.match(/^##\s*(\d+\.\d+\.\d+)/m);
+    const firstVersionHeading = changelog.match(/^##\s*\[?(\d+\.\d+\.\d+)/m);
     expect(firstVersionHeading?.[1]).toBe(packageJson.version);
   });
 

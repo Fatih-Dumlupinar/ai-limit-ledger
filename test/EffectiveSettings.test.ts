@@ -12,6 +12,17 @@ describe('effective settings normalization', () => {
     expect(settings.display.language).toBe('auto');
     expect(settings.display.timeFormat).toBe('both');
     expect(settings.providers).toEqual(['codex', 'claude', 'copilot', 'grok']);
+    expect(settings.refresh.claudeOAuthSeconds).toBe(600);
+  });
+
+  it('clamps a Claude OAuth refresh setting of 120 seconds to the 600-second minimum', () => {
+    const settings = normalizeSettings({ [SETTING_KEYS.claudeOAuthRefreshSeconds]: 120 });
+
+    expect(settings.refresh.claudeOAuthSeconds).toBe(600);
+    expect(settings.diagnostics).toContainEqual({
+      code: 'below-minimum',
+      key: SETTING_KEYS.claudeOAuthRefreshSeconds,
+    });
   });
 
   it('accepts only the supported language values', () => {
