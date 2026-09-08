@@ -69,7 +69,6 @@ if ($inputBytes -le $maxInputBytes) {
       $tmp = "$snapshotPath.ai-limit-ledger-tmp-$([guid]::NewGuid().ToString('N'))"
       try {
         [System.IO.File]::WriteAllText($tmp, ($safe | ConvertTo-Json -Depth 6 -Compress), (New-Object System.Text.UTF8Encoding($false)))
-        try { icacls $tmp /inheritance:r /grant:r "$($env:USERNAME):(F)" 2>$null | Out-Null } catch {}
         Move-Item -LiteralPath $tmp -Destination $snapshotPath -Force
       } finally {
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
